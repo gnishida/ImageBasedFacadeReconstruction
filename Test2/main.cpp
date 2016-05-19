@@ -69,7 +69,7 @@ int main() {
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
 	cv::Mat_<float> S_max(img.rows, 1, 0.0f);
-	cv::Mat_<float> h_max(img.rows, 1, 0.0f);
+	cv::Mat_<int> h_max(img.rows, 1, 0.0f);
 
 	printf("computing");
 	for (int r = 0; r < grayImg.rows; ++r) {
@@ -89,22 +89,58 @@ int main() {
 	}
 	printf("\n");
 
-	// output S_max(y)
-	ofstream out("S_max.txt");
+	// output S_max(y) and h_max(y)
+	ofstream outS("S_max.txt");
 	for (int r = 0; r < S_max.rows; ++r) {
-		out << S_max(r, 0) << endl;
+		outS << S_max(r, 0) << endl;
 	}
-	out.close();
+	outS.close();
+	ofstream outh("h_max.txt");
+	for (int r = 0; r < h_max.rows; ++r) {
+		outh << h_max(r, 0) << endl;
+	}
+	outh.close();
 
 	// normalize S_max(y) to the range [0, 1]
 	cv::Mat S_max_max;
 	cv::reduce(S_max, S_max_max, 0, cv::REDUCE_MAX);
 	S_max /= S_max_max.at<float>(0, 0);
 
+	// store the S_max and h_max in the vector
+	vector<pair<int, pair<float, int>>> y_set;
+	for (int i = 0; i < S_max.rows; ++i) {
+		y_set.push_back(make_pair(i, make_pair(S_max(i, 0), h_max(i, 0))));
+	}
+
 	// find the maximum of S_max(y)
-	int y_max;
+	int y1;
+	int h1;
 	for (int r = 0; r < S_max.rows; ++r) {
-		if (S_max.at<float>(r, 0) == 1.0f) y_max = r;
+		if (S_max(r, 0) == 1.0f) {
+			y1 = r;
+			h1 = h_max(r, 0);
+
+			// remove the region R1 and R2
+			for (int i = y_set.size() - 1; i >= 0; --i) {
+				if (y_set[i].first >= y1 - h1 && y_set[i].first < y1 + h1) {
+					y_set.erase(y_set.begin() + i);
+				}
+			}
+
+			break;
+		}
+	}
+
+	// find the second maximum of S_max(y)
+	float S2 = 0.0f;
+	int y2;
+	int h2;
+	for (int i = 0; i < y_set.size(); ++i) {
+		if (y_set[i].second.first > S2) {
+			y2 = y_set[i].first;
+			S2 = y_set[i].second.first;
+			h2 = y_set[i].second.second;
+		}
 	}
 
 	// visualize S_max(y) and h_max(y)
@@ -130,7 +166,10 @@ int main() {
 			}
 		}
 	}
-	cv::line(result, cv::Point(0, y_max), cv::Point(img.cols, y_max), cv::Scalar(255, 0, 0), 3);
+	cv::rectangle(result, cv::Rect(0, y1 - h1, img.cols, h1), cv::Scalar(255, 0, 0), 3);
+	cv::rectangle(result, cv::Rect(0, y1, img.cols, h1), cv::Scalar(255, 0, 0), 3);
+	cv::rectangle(result, cv::Rect(0, y2 - h2, img.cols, h2), cv::Scalar(0, 0, 255), 3);
+	cv::rectangle(result, cv::Rect(0, y2, img.cols, h2), cv::Scalar(0, 0, 255), 3);
 	cv::imwrite("result.png", result);
 
 
