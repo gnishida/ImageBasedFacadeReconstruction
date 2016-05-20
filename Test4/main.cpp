@@ -10,8 +10,45 @@
 #include <iostream>
 #include <fstream>
 #include <opencv2/opencv.hpp>
+#include "CVUtils.h"
 
 using namespace std;
+
+void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, const vector<int>& y_set, const string& filename) {
+	float S_max_max = cvutils::max(S_max);
+
+	cv::Mat result(img.rows, img.cols + 200 + 300, CV_8UC3, cv::Scalar(255, 255, 255));
+	for (int r = 0; r < img.rows; ++r) {
+		for (int c = 0; c < img.cols + 200 + 300; ++c) {
+			if (c < img.cols) {
+				result.at<cv::Vec3b>(r, c) = img.at<cv::Vec3b>(r, c);
+			}
+			else if (c < img.cols + 200 && r < img.rows - 1) {
+				int v1 = std::min(S_max(r, 0), S_max(r + 1, 0)) / S_max_max * 200;
+				int v2 = std::max(S_max(r, 0), S_max(r + 1, 0)) / S_max_max * 200;
+				if (c - img.cols >= v1 && c - img.cols <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+			else if (c >= img.cols + 200 && r < img.rows - 1) {
+				int v1 = std::min(h_max(r, 0), h_max(r + 1, 0));
+				int v2 = std::max(h_max(r, 0), h_max(r + 1, 0));
+				if (c - img.cols - 200 >= v1 && c - img.cols - 200 <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+		}
+	}
+	for (int i = 0; i < y_set.size(); ++i) {
+		cout << "Y: " << y_set[i] << ", h: " << h_max(y_set[i], 0) << endl;
+
+		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
+		cv::rectangle(result, cv::Rect(0, y_set[i] - h_max(y_set[i], 0), img.cols, h_max(y_set[i], 0)), color, 3);
+		cv::rectangle(result, cv::Rect(0, y_set[i], img.cols, h_max(y_set[i], 0)), color, 3);
+	}
+	cv::imwrite(filename, result);
+
+}
 
 /**
  * IFデータに基づいて画像を生成する。
@@ -198,8 +235,8 @@ int main() {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
-	cv::Mat_<float> S_max(img.rows, 1, 0.0f);
-	cv::Mat_<int> h_max(img.rows, 1, 0.0f);
+	cv::Mat_<float> S_max_V(img.rows, 1, 0.0f);
+	cv::Mat_<int> h_max_V(img.rows, 1, 0.0f);
 
 	/*
 	printf("computing");
@@ -212,44 +249,38 @@ int main() {
 			cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
 			cv::Mat R2 = grayImg(cv::Rect(0, r - h, grayImg.cols, h));
 			float S = MI(R1, R2);
-			if (S > S_max(r, 0)) {
-				S_max(r, 0) = S;
+			if (S > S_max_V(r, 0)) {
+				S_max_V(r, 0) = S;
 				h_max(r, 0) = h;
 			}
 		}
 	}
 	printf("\n");
 
-	// output S_max(y) and h_max(y)
-	ofstream out_S("S_max.txt");
-	for (int r = 0; r < S_max.rows; ++r) {
-		out_S << S_max(r, 0) << endl;
+	// output S_max_V(y) and h_max(y)
+	ofstream out_S("S_max_V.txt");
+	for (int r = 0; r < S_max_V.rows; ++r) {
+		out_S << S_max_V(r, 0) << endl;
 	}
 	out_S.close();
-	ofstream out_h("h_max.txt");
-	for (int r = 0; r < h_max.rows; ++r) {
-		out_h << h_max(r, 0) << endl;
+	ofstream out_h("h_max_V.txt");
+	for (int r = 0; r < h_max_V.rows; ++r) {
+		out_h << h_max_V(r, 0) << endl;
 	}
 	out_h.close();
 	*/
 
 
-	ifstream in_S("S_max.txt");
-	for (int r = 0; r < S_max.rows; ++r) {
-		in_S >> S_max(r, 0);
+	ifstream in_S("S_max_V.txt");
+	for (int r = 0; r < S_max_V.rows; ++r) {
+		in_S >> S_max_V(r, 0);
 	}
 	in_S.close();
-	ifstream in_h("h_max.txt");
-	for (int r = 0; r < h_max.rows; ++r) {
-		in_h >> h_max(r, 0);
+	ifstream in_h("h_max_V.txt");
+	for (int r = 0; r < h_max_V.rows; ++r) {
+		in_h >> h_max_V(r, 0);
 	}
 	in_h.close();
-
-
-	// normalize S_max(y) to the range [0, 1]
-	cv::Mat S_max_max;
-	cv::reduce(S_max, S_max_max, 0, cv::REDUCE_MAX);
-	S_max /= S_max_max.at<float>(0, 0);
 
 	// initialize IF
 	cv::Mat IF(grayImg.rows, grayImg.cols, CV_32FC4);
@@ -266,13 +297,13 @@ int main() {
 	}
 	outputIF(IF, "IF1.png");
 
-	// find the maximum of S_max(y)
+	// find the maximum of S_max_V(y)
 	float S = 0.0f;
 	int y;
-	for (int r = 0; r < S_max.rows; ++r) {
-		if (S_max(r, 0) > S) {
+	for (int r = 0; r < S_max_V.rows; ++r) {
+		if (S_max_V(r, 0) > S) {
 			y = r;
-			S = S_max(r, 0);
+			S = S_max_V(r, 0);
 		}
 	}
 
@@ -280,47 +311,25 @@ int main() {
 	y_set.push_back(y);
 
 	// shrink IF
-	shrinkIF(IF, y, h_max(y, 0));
+	shrinkIF(IF, y, h_max_V(y, 0));
 	outputIF(IF, "IF2.png");
 
-	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
+	cout << "y: " << y << ", S: " << S << ", h: " << h_max_V(y, 0) << endl;
 
 	// check upward
-	findSplitsUpward(S_max, h_max, y - h_max(y, 0), h_max(y, 0), S, y_set, IF);
+	findSplitsUpward(S_max_V, h_max_V, y - h_max_V(y, 0), h_max_V(y, 0), S, y_set, IF);
 
 	cout << "Terminated." << endl;
 	
-	// visualize S_max(y) and h_max(y)
-	cv::Mat result(img.rows, img.cols + 200 + 300, CV_8UC3, cv::Scalar(255, 255, 255));
-	for (int r = 0; r < img.rows; ++r) {
-		for (int c = 0; c < img.cols + 200 + 300; ++c) {
-			if (c < img.cols) {
-				result.at<cv::Vec3b>(r, c) = img.at<cv::Vec3b>(r, c);
-			}
-			else if (c < img.cols + 200 && r < img.rows - 1) {
-				int v1 = std::min(S_max(r, 0), S_max(r + 1, 0)) * 200;
-				int v2 = std::max(S_max(r, 0), S_max(r + 1, 0)) * 200;
-				if (c - img.cols >= v1 && c - img.cols <= v2) {
-					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
-				}
-			}
-			else if (c >= img.cols + 200 && r < img.rows - 1) {
-				int v1 = std::min(h_max(r, 0), h_max(r + 1, 0));
-				int v2 = std::max(h_max(r, 0), h_max(r + 1, 0));
-				if (c - img.cols - 200 >= v1 && c - img.cols - 200 <= v2) {
-					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
-				}
-			}
-		}
-	}
-	for (int i = 0; i < y_set.size(); ++i) {
-		cout << "Y: " << y_set[i] << ", h: " << h_max(y_set[i], 0) << endl;
+	outputIF(IF, "IF9.png");
 
-		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
-		cv::rectangle(result, cv::Rect(0, y_set[i] - h_max(y_set[i], 0), img.cols, h_max(y_set[i], 0)), color, 3);
-		cv::rectangle(result, cv::Rect(0, y_set[i], img.cols, h_max(y_set[i], 0)), color, 3);
-	}
-	cv::imwrite("result.png", result);
+	// visualize S_max_V(y) and h_max_V(y)
+	outputFacadeStructure(img, S_max_V, h_max_V, y_set, "result.png");
+
+
+	//////////////////////////////////////////////////////////////////////////////////////////////
+	// horizontal split
+
 
 
 	return 0;
