@@ -9,12 +9,13 @@
 #include <algorithm>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 #include <opencv2/opencv.hpp>
 #include "CVUtils.h"
 
 using namespace std;
 
-void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, const vector<int>& y_set, const string& filename) {
+void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<int>& y_set, const string& filename) {
 	float S_max_max = cvutils::max(S_max);
 
 	cv::Mat result(img.rows, img.cols + 200 + 300, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -47,7 +48,53 @@ void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& S_max, con
 		cv::rectangle(result, cv::Rect(0, y_set[i], img.cols, h_max(y_set[i], 0)), color, 3);
 	}
 	cv::imwrite(filename, result);
+}
 
+void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<int>& x_set, const string& filename) {
+	float S_max_max = cvutils::max(S_max);
+
+	cv::Mat result(img.rows + 200 + 300, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+	for (int r = 0; r < img.rows + 200 + 300; ++r) {
+		for (int c = 0; c < img.cols; ++c) {
+			if (r < img.rows) {
+				result.at<cv::Vec3b>(r, c) = img.at<cv::Vec3b>(r, c);
+			}
+			else if (r < img.rows + 200 && c < img.cols - 1) {
+				int v1 = std::min(S_max(0, c), S_max(0, c + 1)) / S_max_max * 200;
+				int v2 = std::max(S_max(0, c), S_max(0, c + 1)) / S_max_max * 200;
+				if (r - img.rows >= v1 && r - img.rows <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+			else if (r >= img.rows + 200 && c < img.cols - 1) {
+				int v1 = std::min(w_max(0, c), w_max(0, c + 1));
+				int v2 = std::max(w_max(0, c), w_max(0, c + 1));
+				if (r - img.rows - 200 >= v1 && r - img.rows - 200 <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+		}
+	}
+	for (int i = 0; i < x_set.size(); ++i) {
+		cout << "X: " << x_set[i] << ", w: " << w_max(0, x_set[i]) << endl;
+
+		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
+		cv::rectangle(result, cv::Rect(x_set[i] - w_max(0, x_set[i]), 0, w_max(0, x_set[i]), img.rows), color, 3);
+		cv::rectangle(result, cv::Rect(x_set[i], 0, w_max(0, x_set[i]), img.rows), color, 3);
+	}
+	cv::imwrite(filename, result);
+}
+
+void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
+	cv::Mat result = img.clone();
+
+	for (int i = 0; i < y_set.size(); ++i) {
+		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), 3);
+	}
+	for (int i = 0; i < x_set.size(); ++i) {
+		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), 3);
+	}
+	cv::imwrite(filename, result);
 }
 
 /**
@@ -132,7 +179,9 @@ float MI(const cv::Mat& R1, const cv::Mat& R2) {
  * @param	y		Splitの位置
  * @param	h		Overlapさせる高さ
  */
-void shrinkIF(cv::Mat& IF, int y, int h) {
+void vshrinkIF(cv::Mat& IF, int y, int h) {
+	h = std::min(h, IF.rows - y);
+
 	cv::Mat IF_bak = IF.clone();
 	IF = cv::Mat(IF.rows - h, IF.cols, CV_32FC4);
 
@@ -158,11 +207,64 @@ void shrinkIF(cv::Mat& IF, int y, int h) {
 	}
 }
 
+void vshrinkIF(cv::Mat& IF, const vector<int>& y_set, const cv::Mat_<float>& h_max) {
+	vector<int> y = y_set;
+	sort(y.begin(), y.end());
+
+	for (int i = y.size() - 1; i >= 0; --i) {
+		vshrinkIF(IF, y[i], h_max(y[i], 0));
+	}
+}
+
+/**
+* Irreducible Facadeの、[x, x+w]を[x-w, x]へ移動してshrinkさせる。
+*
+* @param	IF		Irreducible Facade
+* @param	x		Splitの位置
+* @param	w		Overlapさせる幅
+*/
+void hshrinkIF(cv::Mat& IF, int x, int w) {
+	w = std::min(w, IF.cols - x);
+
+	cv::Mat IF_bak = IF.clone();
+	IF = cv::Mat(IF.rows, IF.cols - w, CV_32FC4);
+
+	// overlapping部分より左側をコピー
+	for (int c = 0; c < x; ++c) {
+		for (int r = 0; r < IF.rows; ++r) {
+			IF.at<cv::Vec4f>(r, c) = IF_bak.at<cv::Vec4f>(r, c);
+		}
+	}
+
+	// overlapping部分をコピー
+	for (int c = x - w; c < x; ++c) {
+		for (int r = 0; r < IF.rows; ++r) {
+			IF.at<cv::Vec4f>(r, c) = IF.at<cv::Vec4f>(r, c) + IF_bak.at<cv::Vec4f>(r, c + w);
+		}
+	}
+
+	// overlapping部分より右側をコピー
+	for (int c = x; c < IF.cols; ++c) {
+		for (int r = 0; r < IF.rows; ++r) {
+			IF.at<cv::Vec4f>(r, c) = IF_bak.at<cv::Vec4f>(r, c + w);
+		}
+	}
+}
+
+void hshrinkIF(cv::Mat& IF, const vector<int>& x_set, const cv::Mat_<float>& w_max) {
+	vector<int> x = x_set;
+	sort(x.begin(), x.end());
+
+	for (int i = x.size() - 1; i >= 0; --i) {
+		hshrinkIF(IF, x[i], w_max(0, x[i]));
+	}
+}
+
 /**
 * y_initialの周辺で、最適なsplit位置、yを探す。
 * その時のsimilarityを返却する。
 */
-float findAdjacentSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, int y_initial, int h, int& y) {
+float findAdjacentSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_initial, int h, int& y) {
 	y = y_initial;
 	float S = S_max(y, 0);
 
@@ -182,7 +284,7 @@ float findAdjacentSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>&
 * y_startから開始し、上方向へ、最適なsplit位置、next_yを探す。
 * その時のsimilarityを返却する。
 */
-float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, int y_start, int& next_y) {
+float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_start, int& next_y) {
 	float S = 0.0f;
 
 	for (int r = y_start; r >= 0; --r) {
@@ -198,7 +300,7 @@ float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_m
 	return S;
 }
 
-void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, int y, int h, float tau_max, vector<int>& y_set, cv::Mat& IF) {
+void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, vector<int>& y_set, cv::Mat& IF) {
 	while (true) {
 		int next_y;
 		float S = findAdjacentSplitUpward(S_max, h_max, y, h, next_y);
@@ -219,68 +321,213 @@ void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<int>& h_max, 
 				//cout << "  --> modified. y: " << next_y << ", S: " << S << ", h: " << h_max(next_y, 0) << endl;
 			}
 			else {
-				return;
+				break;
 			}
 		}
 
 		// shrink IF
-		shrinkIF(IF, next_y, h_max(next_y, 0));
+		vshrinkIF(IF, next_y, h_max(next_y, 0));
 
 		outputIF(IF, "IF3.png");
 	}
+
+	cout << "Terminated." << endl;
+	outputIF(IF, "IF9.png");
 }
 
-int main() {
-	cv::Mat img = cv::imread("../facade/facade.png");
+/**
+* x_initialの周辺で、最適なsplit位置、xを探す。
+* その時のsimilarityを返却する。
+*/
+float findAdjacentHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x_initial, int w, int dir, int& x) {
+	x = x_initial;
+	float S = S_max(0, x);
+
+	for (int c = std::max(x_initial - 3, 0); c <= x_initial + 3; ++c) {
+		if (abs(w_max(0, c) - w) > 3) continue;
+
+		if (S_max(0, c) > S) {
+			x = c;
+			S = S_max(0, c);
+		}
+	}
+
+	return S;
+}
+
+/**
+* x_startからdir方向へ探索し、次の最適なsplit位置、next_xを探す。
+* その時のsimilarityを返却する。
+*/
+float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int dir, int& next_x) {
+	float S = 0.0f;
+
+	for (int c = x; c >= 0 && c < S_max.cols; c += dir) {
+		if (c + w_max(0, c) * dir < 0 || c + w_max(0, c) * dir >= S_max.cols) continue;
+
+		if (abs(c - w_max(0, c) * dir - x) > 3) continue;
+
+		if (S_max(0, c) > S) {
+			next_x = c;
+			S = S_max(0, c);
+		}
+	}
+
+	return S;
+}
+
+void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<int>& x_set) {
+	while (true) {
+		int next_x;
+		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, dir, next_x);
+
+		cout << "x: " << next_x << ", S: " << S << ", w: " << w_max(0, next_x) << endl;
+
+		if (S >= tau_max * 0.75f) {
+			x_set.push_back(next_x);
+			x = next_x + w * dir;
+		}
+		else {
+			cout << " --> not good" << endl;
+
+			S = findNextHorizontalSplit(S_max, w_max, x, dir, next_x);
+			if (S >= tau_max * 0.75f) {
+				x_set.push_back(next_x);
+				x = next_x + w_max(next_x, 0) * dir;
+			}
+			else {
+				break;
+			}
+		}
+
+		// shrink IF
+		//hshrinkIF(IF, next_x, w_max(0, next_x));
+		//outputIF(IF, "IF13.png");
+	}
+
+	cout << "Terminated." << endl;
+	//outputIF(IF, "IF19.png");
+}
+
+void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
-	cv::Mat_<float> S_max_V(img.rows, 1, 0.0f);
-	cv::Mat_<int> h_max_V(img.rows, 1, 0.0f);
+	cv::Mat_<float> SV_max(img.rows, 1, 0.0f);
+	cv::Mat_<float> h_max(img.rows, 1, 0.0f);
 
-	/*
-	printf("computing");
-	for (int r = 0; r < grayImg.rows; ++r) {
-		printf("\rcomputing r = %d/%d  ", r, grayImg.rows);
+	ifstream in_SV("SV_max.txt");
+	ifstream in_h("h_max.txt");
+	if (in_SV.good() && in_h.good()) {
+		in_SV.close();
+		in_h.close();
+		SV_max = cvutils::read("SV_max.txt");
+		h_max = cvutils::read("h_max.txt");
+	}
+	else {
+		printf("computing");
+		for (int r = 0; r < grayImg.rows; ++r) {
+			printf("\rcomputing r = %d/%d  ", r, grayImg.rows);
 
-		for (int h = 80; h < 200; ++h) {
-			if (r - h < 0 || r + h >= grayImg.rows) continue;
+			for (int h = 80; h < 200; ++h) {
+				if (r - h < 0 || r + h >= grayImg.rows) continue;
 
-			cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
-			cv::Mat R2 = grayImg(cv::Rect(0, r - h, grayImg.cols, h));
-			float S = MI(R1, R2);
-			if (S > S_max_V(r, 0)) {
-				S_max_V(r, 0) = S;
-				h_max(r, 0) = h;
+				cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
+				cv::Mat R2 = grayImg(cv::Rect(0, r - h, grayImg.cols, h));
+				float S = MI(R1, R2);
+				if (S > SV_max(r, 0)) {
+					SV_max(r, 0) = S;
+					h_max(r, 0) = h;
+				}
 			}
 		}
-	}
-	printf("\n");
+		printf("\n");
 
-	// output S_max_V(y) and h_max(y)
-	ofstream out_S("S_max_V.txt");
-	for (int r = 0; r < S_max_V.rows; ++r) {
-		out_S << S_max_V(r, 0) << endl;
+		// output SV_max(x) and h_max(x)
+		cvutils::write("SV_max.txt", SV_max);
+		cvutils::write("h_max.txt", h_max);
 	}
-	out_S.close();
-	ofstream out_h("h_max_V.txt");
-	for (int r = 0; r < h_max_V.rows; ++r) {
-		out_h << h_max_V(r, 0) << endl;
-	}
-	out_h.close();
-	*/
 
+	// initialize IF
+	IF = cv::Mat(grayImg.rows, grayImg.cols, CV_32FC4);
+	for (int r = 0; r < IF.rows; ++r) {
+		for (int c = 0; c < IF.cols; ++c) {
+			cv::Vec4f v;
+			v[0] = img.at<cv::Vec3b>(r, c)[0];
+			v[1] = img.at<cv::Vec3b>(r, c)[1];
+			v[2] = img.at<cv::Vec3b>(r, c)[2];
+			v[3] = 1.0f;
 
-	ifstream in_S("S_max_V.txt");
-	for (int r = 0; r < S_max_V.rows; ++r) {
-		in_S >> S_max_V(r, 0);
+			IF.at<cv::Vec4f>(r, c) = v;
+		}
 	}
-	in_S.close();
-	ifstream in_h("h_max_V.txt");
-	for (int r = 0; r < h_max_V.rows; ++r) {
-		in_h >> h_max_V(r, 0);
+	outputIF(IF, "IF1.png");
+
+	// find the maximum of SV_max(y)
+	float S = 0.0f;
+	int y;
+	for (int r = 0; r < SV_max.rows; ++r) {
+		if (SV_max(r, 0) > S) {
+			y = r;
+			S = SV_max(r, 0);
+		}
 	}
-	in_h.close();
+
+	y_set.push_back(y);
+
+	// shrink IF
+	vshrinkIF(IF, y, h_max(y, 0));
+	outputIF(IF, "IF2.png");
+
+	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
+
+	// check upward
+	findSplitsUpward(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, y_set, IF);
+
+	// visualize S_max_V(y) and h_max(y)
+	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
+}
+
+void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
+	cv::Mat grayImg;
+
+	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
+
+	cv::Mat_<float> SH_max(1, grayImg.cols, 0.0f);
+	cv::Mat_<float> w_max(1, grayImg.cols, 0.0f);
+
+	ifstream in_SH("SH_max.txt");
+	ifstream in_w("w_max.txt");
+	if (in_SH.good() && in_w.good()) {
+		in_SH.close();
+		in_w.close();
+		SH_max = cvutils::read("SH_max.txt");
+		w_max = cvutils::read("w_max.txt");
+	}
+	else {
+		printf("computing");
+		for (int c = 0; c < grayImg.cols; ++c) {
+			printf("\rcomputing c = %d/%d  ", c, grayImg.cols);
+
+			for (int w = 80; w < 200; ++w) {
+				if (c - w < 0 || c + w >= grayImg.cols) continue;
+
+				cv::Mat R1 = grayImg(cv::Rect(c, 0, w, grayImg.rows));
+				cv::Mat R2 = grayImg(cv::Rect(c - w, 0, w, grayImg.rows));
+
+				float S = MI(R1, R2);
+				if (S > SH_max(0, c)) {
+					SH_max(0, c) = S;
+					w_max(0, c) = w;
+				}
+			}
+		}
+		printf("\n");
+
+		// output SH_max(x) and w_max(x)
+		cvutils::write("SH_max.txt", SH_max);
+		cvutils::write("w_max.txt", w_max);
+	}
 
 	// initialize IF
 	cv::Mat IF(grayImg.rows, grayImg.cols, CV_32FC4);
@@ -295,42 +542,49 @@ int main() {
 			IF.at<cv::Vec4f>(r, c) = v;
 		}
 	}
-	outputIF(IF, "IF1.png");
+	outputIF(IF, "IF11.png");
 
-	// find the maximum of S_max_V(y)
+	// find the maximum of SH_max(x)
 	float S = 0.0f;
-	int y;
-	for (int r = 0; r < S_max_V.rows; ++r) {
-		if (S_max_V(r, 0) > S) {
-			y = r;
-			S = S_max_V(r, 0);
+	int x;
+	for (int c = 0; c < SH_max.cols; ++c) {
+		if (SH_max(0, c) > S) {
+			x = c;
+			S = SH_max(0, c);
 		}
 	}
 
+	x_set.push_back(x);
+
+	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
+
+	// check leftward
+	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
+
+	// check rightward
+	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
+
+	hshrinkIF(IF, x_set, w_max);
+
+	// visualize S_max_V(y) and h_max(y)
+	outputFacadeStructureH(img, SH_max, w_max, x_set, "result2.png");
+}
+
+int main() {
+	cv::Mat img = cv::imread("../facade/facade.png");
+
+	// vertical split
 	vector<int> y_set;
-	y_set.push_back(y);
+	cv::Mat IF;
+	verticalSplit(img, y_set, IF);
 
-	// shrink IF
-	shrinkIF(IF, y, h_max_V(y, 0));
-	outputIF(IF, "IF2.png");
-
-	cout << "y: " << y << ", S: " << S << ", h: " << h_max_V(y, 0) << endl;
-
-	// check upward
-	findSplitsUpward(S_max_V, h_max_V, y - h_max_V(y, 0), h_max_V(y, 0), S, y_set, IF);
-
-	cout << "Terminated." << endl;
-	
-	outputIF(IF, "IF9.png");
-
-	// visualize S_max_V(y) and h_max_V(y)
-	outputFacadeStructure(img, S_max_V, h_max_V, y_set, "result.png");
-
-
-	//////////////////////////////////////////////////////////////////////////////////////////////
 	// horizontal split
+	vector<int> x_set;
+	cv::Mat imgIF;
+	createIFImage(IF, imgIF);
+	horizontalSplit(imgIF, x_set);
 
-
+	outputFacadeStructure(img, y_set, x_set, "result3.png");
 
 	return 0;
 }
