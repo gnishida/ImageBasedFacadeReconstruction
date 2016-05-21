@@ -264,7 +264,7 @@ void hshrinkIF(cv::Mat& IF, const vector<int>& x_set, const cv::Mat_<float>& w_m
 * y_initialの周辺で、最適なsplit位置、yを探す。
 * その時のsimilarityを返却する。
 */
-float findAdjacentSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_initial, int h, int& y) {
+float findAdjacentVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_initial, int h, int& y) {
 	y = y_initial;
 	float S = S_max(y, 0);
 
@@ -281,15 +281,15 @@ float findAdjacentSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float
 }
 
 /**
-* y_startから開始し、上方向へ、最適なsplit位置、next_yを探す。
+* yから開始し、上方向へ、最適なsplit位置、next_yを探す。
 * その時のsimilarityを返却する。
 */
-float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_start, int& next_y) {
+float findNextVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int dir, int& next_y) {
 	float S = 0.0f;
 
-	for (int r = y_start; r >= 0; --r) {
-		if (r - h_max(r, 0) < 0) continue;
-		if (abs(r + h_max(r, 0) - y_start) > 3) continue;
+	for (int r = y; r >= 0 && r < S_max.rows; r += dir) {
+		if (r + h_max(r, 0) * dir < 0 || r + h_max(r, 0) * dir >= S_max.rows) continue;
+		if (abs(r - h_max(r, 0) * dir - y) > 3) continue;
 
 		if (S_max(r, 0) > S) {
 			next_y = r;
@@ -300,25 +300,24 @@ float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h
 	return S;
 }
 
-void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, vector<int>& y_set) {
+void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<int>& y_set) {
 	while (true) {
 		int next_y;
-		float S = findAdjacentSplitUpward(S_max, h_max, y, h, next_y);
+		float S = findAdjacentVerticalSplit(S_max, h_max, y, h, next_y);
 
 		cout << "y: " << next_y << ", S: " << S << ", h: " << h_max(next_y, 0) << endl;
 
 		if (S >= tau_max * 0.75f) {
 			y_set.push_back(next_y);
-			y = next_y - h;
+			y = next_y + h * dir;
 		}
 		else {
 			cout << " --> not good" << endl;
 
-			S = findNextSplitUpward(S_max, h_max, y, next_y);
+			S = findNextVerticalSplit(S_max, h_max, y, dir, next_y);
 			if (S >= tau_max * 0.75f) {
 				y_set.push_back(next_y);
-				y = next_y - h_max(next_y, 0);
-				//cout << "  --> modified. y: " << next_y << ", S: " << S << ", h: " << h_max(next_y, 0) << endl;
+				y = next_y + h_max(next_y, 0) * dir;
 			}
 			else {
 				break;
@@ -333,7 +332,7 @@ void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max
 * x_initialの周辺で、最適なsplit位置、xを探す。
 * その時のsimilarityを返却する。
 */
-float findAdjacentHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x_initial, int w, int dir, int& x) {
+float findAdjacentHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x_initial, int w, int& x) {
 	x = x_initial;
 	float S = S_max(0, x);
 
@@ -358,7 +357,6 @@ float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float
 
 	for (int c = x; c >= 0 && c < S_max.cols; c += dir) {
 		if (c + w_max(0, c) * dir < 0 || c + w_max(0, c) * dir >= S_max.cols) continue;
-
 		if (abs(c - w_max(0, c) * dir - x) > 3) continue;
 
 		if (S_max(0, c) > S) {
@@ -373,7 +371,7 @@ float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float
 void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<int>& x_set) {
 	while (true) {
 		int next_x;
-		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, dir, next_x);
+		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, next_x);
 
 		cout << "x: " << next_x << ", S: " << S << ", w: " << w_max(0, next_x) << endl;
 
@@ -460,8 +458,9 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 
 	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
 
-	// check upward
-	findSplitsUpward(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, y_set);
+	// check splits
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set);
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, 1, y_set);
 
 	vshrinkIF(IF, y_set, h_max);
 
@@ -533,10 +532,8 @@ void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
 
 	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
 
-	// check leftward
+	// check splits
 	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
-
-	// check rightward
 	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
 
 	hshrinkIF(IF, x_set, w_max);
