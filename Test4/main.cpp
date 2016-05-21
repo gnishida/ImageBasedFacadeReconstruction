@@ -300,7 +300,7 @@ float findNextSplitUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h
 	return S;
 }
 
-void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, vector<int>& y_set, cv::Mat& IF) {
+void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, vector<int>& y_set) {
 	while (true) {
 		int next_y;
 		float S = findAdjacentSplitUpward(S_max, h_max, y, h, next_y);
@@ -324,15 +324,9 @@ void findSplitsUpward(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max
 				break;
 			}
 		}
-
-		// shrink IF
-		vshrinkIF(IF, next_y, h_max(next_y, 0));
-
-		outputIF(IF, "IF3.png");
 	}
 
 	cout << "Terminated." << endl;
-	outputIF(IF, "IF9.png");
 }
 
 /**
@@ -399,14 +393,9 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 				break;
 			}
 		}
-
-		// shrink IF
-		//hshrinkIF(IF, next_x, w_max(0, next_x));
-		//outputIF(IF, "IF13.png");
 	}
 
 	cout << "Terminated." << endl;
-	//outputIF(IF, "IF19.png");
 }
 
 void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
@@ -475,14 +464,12 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 
 	y_set.push_back(y);
 
-	// shrink IF
-	vshrinkIF(IF, y, h_max(y, 0));
-	outputIF(IF, "IF2.png");
-
 	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
 
 	// check upward
-	findSplitsUpward(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, y_set, IF);
+	findSplitsUpward(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, y_set);
+
+	vshrinkIF(IF, y_set, h_max);
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
