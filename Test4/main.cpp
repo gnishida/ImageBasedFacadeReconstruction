@@ -441,13 +441,7 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 	IF = cv::Mat(grayImg.rows, grayImg.cols, CV_32FC4);
 	for (int r = 0; r < IF.rows; ++r) {
 		for (int c = 0; c < IF.cols; ++c) {
-			cv::Vec4f v;
-			v[0] = img.at<cv::Vec3b>(r, c)[0];
-			v[1] = img.at<cv::Vec3b>(r, c)[1];
-			v[2] = img.at<cv::Vec3b>(r, c)[2];
-			v[3] = 1.0f;
-
-			IF.at<cv::Vec4f>(r, c) = v;
+			IF.at<cv::Vec4f>(r, c) = cv::Vec4f(img.at<cv::Vec3b>(r, c)[0], img.at<cv::Vec3b>(r, c)[1], img.at<cv::Vec3b>(r, c)[2], 1.0f);
 		}
 	}
 	outputIF(IF, "IF1.png");
@@ -520,13 +514,7 @@ void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
 	cv::Mat IF(grayImg.rows, grayImg.cols, CV_32FC4);
 	for (int r = 0; r < IF.rows; ++r) {
 		for (int c = 0; c < IF.cols; ++c) {
-			cv::Vec4f v;
-			v[0] = img.at<cv::Vec3b>(r, c)[0];
-			v[1] = img.at<cv::Vec3b>(r, c)[1];
-			v[2] = img.at<cv::Vec3b>(r, c)[2];
-			v[3] = 1.0f;
-
-			IF.at<cv::Vec4f>(r, c) = v;
+			IF.at<cv::Vec4f>(r, c) = cv::Vec4f(img.at<cv::Vec3b>(r, c)[0], img.at<cv::Vec3b>(r, c)[1], img.at<cv::Vec3b>(r, c)[2], 1.0f);
 		}
 	}
 	outputIF(IF, "IF11.png");
