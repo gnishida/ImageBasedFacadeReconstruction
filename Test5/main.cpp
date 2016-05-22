@@ -89,6 +89,7 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
 	cv::Mat result = img.clone();
 
+
 	for (int i = 0; i < y_set.size(); ++i) {
 		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), 3);
 	}
@@ -208,12 +209,13 @@ void vshrinkIF(cv::Mat& IF, int y, int h) {
 	}
 }
 
+/**
+ * Irredicible facadeを垂直方向に、split位置y_setに従ってshrinkさせる。
+ * ただし、y_setは昇順に並んでいるものとする。
+ */
 void vshrinkIF(cv::Mat& IF, const vector<int>& y_set, const cv::Mat_<float>& h_max) {
-	vector<int> y = y_set;
-	sort(y.begin(), y.end());
-
-	for (int i = y.size() - 1; i >= 0; --i) {
-		vshrinkIF(IF, y[i], h_max(y[i], 0));
+	for (int i = y_set.size() - 1; i >= 0; --i) {
+		vshrinkIF(IF, y_set[i], h_max(y_set[i], 0));
 	}
 }
 
@@ -252,12 +254,13 @@ void hshrinkIF(cv::Mat& IF, int x, int w) {
 	}
 }
 
+/**
+ * Irreducible facadeを、splitラインの位置x_setに基づいてshrinkさせる。
+ * ただし、x_setは、昇順に並んでいるものとする。
+ */
 void hshrinkIF(cv::Mat& IF, const vector<int>& x_set, const cv::Mat_<float>& w_max) {
-	vector<int> x = x_set;
-	sort(x.begin(), x.end());
-
-	for (int i = x.size() - 1; i >= 0; --i) {
-		hshrinkIF(IF, x[i], w_max(0, x[i]));
+	for (int i = x_set.size() - 1; i >= 0; --i) {
+		hshrinkIF(IF, x_set[i], w_max(0, x_set[i]));
 	}
 }
 
@@ -463,7 +466,12 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set);
 	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, 1, y_set);
 
+	sort(y_set.begin(), y_set.end());
 	vshrinkIF(IF, y_set, h_max);
+
+	// add the both ends of splits
+	y_set.insert(y_set.begin(), y_set[0] - h_max(y_set[0], 0));
+	y_set.push_back(y_set.back() + h_max(y_set.back(), 0));
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
@@ -537,7 +545,12 @@ void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
 	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
 	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
 
+	sort(x_set.begin(), x_set.end());
 	hshrinkIF(IF, x_set, w_max);
+
+	// add the both ends of splits
+	x_set.insert(x_set.begin(), x_set[0] - w_max(0, x_set[0]));
+	x_set.push_back(x_set.back() + w_max(0, x_set.back()));
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureH(img, SH_max, w_max, x_set, "result2.png");
