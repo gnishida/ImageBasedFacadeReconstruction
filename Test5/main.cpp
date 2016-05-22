@@ -16,7 +16,7 @@
 
 using namespace std;
 
-void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<int>& y_set, const string& filename) {
+void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<vector<int>>& y_set, const string& filename) {
 	float S_max_max = cvutils::max(S_max);
 
 	cv::Mat result(img.rows, img.cols + 200 + 300, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -42,16 +42,17 @@ void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 		}
 	}
 	for (int i = 0; i < y_set.size(); ++i) {
-		cout << "Y: " << y_set[i] << ", h: " << h_max(y_set[i], 0) << endl;
+		for (int j = 0; j < y_set[i].size() - 1; ++j) {
+			cout << "Y: " << y_set[i][j] << ", h: " << h_max(y_set[i][j], 0) << endl;
 
-		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
-		cv::rectangle(result, cv::Rect(0, y_set[i] - h_max(y_set[i], 0), img.cols, h_max(y_set[i], 0)), color, 3);
-		cv::rectangle(result, cv::Rect(0, y_set[i], img.cols, h_max(y_set[i], 0)), color, 3);
+			cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
+			cv::rectangle(result, cv::Rect(0, y_set[i][j], img.cols, y_set[i][j + 1] - y_set[i][j]), color, 3);
+		}
 	}
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<int>& x_set, const string& filename) {
+void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<vector<int>>& x_set, const string& filename) {
 	float S_max_max = cvutils::max(S_max);
 
 	cv::Mat result(img.rows + 200 + 300, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -77,25 +78,64 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 		}
 	}
 	for (int i = 0; i < x_set.size(); ++i) {
-		cout << "X: " << x_set[i] << ", w: " << w_max(0, x_set[i]) << endl;
+		for (int j = 0; j < x_set[i].size() - 1; ++j) {
+			cout << "X: " << x_set[i][j] << ", w: " << w_max(0, x_set[i][j]) << endl;
 
-		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
-		cv::rectangle(result, cv::Rect(x_set[i] - w_max(0, x_set[i]), 0, w_max(0, x_set[i]), img.rows), color, 3);
-		cv::rectangle(result, cv::Rect(x_set[i], 0, w_max(0, x_set[i]), img.rows), color, 3);
+			cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
+			cv::rectangle(result, cv::Rect(x_set[i][j], 0, x_set[i][j + 1] - x_set[i][j], img.rows), color, 3);
+		}
 	}
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
+void outputFacadeStructure(const cv::Mat& img, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const string& filename) {
 	cv::Mat result = img.clone();
 
 
 	for (int i = 0; i < y_set.size(); ++i) {
-		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), 3);
+		for (int j = 0; j < y_set[i].size(); ++j) {
+			cv::line(result, cv::Point(0, y_set[i][j]), cv::Point(img.cols, y_set[i][j]), cv::Scalar(0, 0, 255), 3);
+		}
 	}
 	for (int i = 0; i < x_set.size(); ++i) {
-		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), 3);
+		for (int j = 0; j < x_set[i].size(); ++j) {
+			cv::line(result, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img.rows), cv::Scalar(0, 0, 255), 3);
+		}
 	}
+	cv::imwrite(filename, result);
+}
+
+void outputTileStructure(const cv::Mat& tile, const cv::Mat_<float>& Ver, const cv::Mat_<float>& Hor, const string& filename) {
+	cv::Mat result(tile.rows + 100, tile.cols + 100, CV_8UC3, cv::Scalar(255, 255, 255));
+
+	// get the maximum value of Ver(y) and Hor(x)
+	float max_Ver = cvutils::max(Ver);
+	float min_Ver = cvutils::min(Ver);
+	float max_Hor = cvutils::max(Hor);
+	float min_Hor = cvutils::min(Hor);
+
+	for (int r = 0; r < result.rows; ++r) {
+		for (int c = 0; c < result.cols; ++c) {
+			if (r < tile.rows && c < tile.cols) {
+				result.at<cv::Vec3b>(r, c) = tile.at<cv::Vec3b>(r, c);
+			}
+			else if (r < tile.rows - 1) {
+				int v1 = min(Ver(r, 0), Ver(r + 1, 0)) / (max_Ver - min_Ver) * 100;
+				int v2 = max(Ver(r, 0), Ver(r + 1, 0)) / (max_Ver - min_Ver) * 100;
+				if (c - tile.cols >= v1 && c - tile.cols <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+			else if (c < tile.cols - 1) {
+				int v1 = min(Hor(0, c), Hor(0, c + 1)) / (max_Hor - min_Hor) * 100;
+				int v2 = max(Hor(0, c), Hor(0, c + 1)) / (max_Hor - min_Hor) * 100;
+				if (r - tile.rows >= v1 && r - tile.rows <= v2) {
+					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
+				}
+			}
+		}
+	}
+
 	cv::imwrite(filename, result);
 }
 
@@ -213,9 +253,11 @@ void vshrinkIF(cv::Mat& IF, int y, int h) {
  * Irredicible facadeを垂直方向に、split位置y_setに従ってshrinkさせる。
  * ただし、y_setは昇順に並んでいるものとする。
  */
-void vshrinkIF(cv::Mat& IF, const vector<int>& y_set, const cv::Mat_<float>& h_max) {
+void vshrinkIF(cv::Mat& IF, const vector<vector<int>>& y_set, const cv::Mat_<float>& h_max) {
 	for (int i = y_set.size() - 1; i >= 0; --i) {
-		vshrinkIF(IF, y_set[i], h_max(y_set[i], 0));
+		for (int j = y_set[i].size() - 2; j >= 1; --j) {
+			vshrinkIF(IF, y_set[i][j], h_max(y_set[i][j], 0));
+		}
 	}
 }
 
@@ -258,9 +300,11 @@ void hshrinkIF(cv::Mat& IF, int x, int w) {
  * Irreducible facadeを、splitラインの位置x_setに基づいてshrinkさせる。
  * ただし、x_setは、昇順に並んでいるものとする。
  */
-void hshrinkIF(cv::Mat& IF, const vector<int>& x_set, const cv::Mat_<float>& w_max) {
+void hshrinkIF(cv::Mat& IF, const vector<vector<int>>& x_set, const cv::Mat_<float>& w_max) {
 	for (int i = x_set.size() - 1; i >= 0; --i) {
-		hshrinkIF(IF, x_set[i], w_max(0, x_set[i]));
+		for (int j = x_set[i].size() - 2; j >= 1; --j) {
+			hshrinkIF(IF, x_set[i][j], w_max(0, x_set[i][j]));
+		}
 	}
 }
 
@@ -304,7 +348,7 @@ float findNextVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>&
 	return S;
 }
 
-void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<int>& y_set, vector<int>& y_group) {
+void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<vector<int>>& y_set) {
 	while (true) {
 		int next_y;
 		float S = findAdjacentVerticalSplit(S_max, h_max, y, h, next_y);
@@ -313,23 +357,19 @@ void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_m
 
 		if (S >= tau_max * 0.75f) {
 			if (dir == -1) {
-				y_set.insert(y_set.begin(), next_y);
-				y_group.front()++;
+				y_set.front().insert(y_set.front().begin(), next_y);
 			}
 			else {
-				y_set.push_back(next_y);
-				y_group.back()++;
+				y_set.back().push_back(next_y);
 			}
 			y = next_y + h * dir;
 		}
 		else {
 			if (dir == -1) {
-				y_set.insert(y_set.begin(), next_y);
-				y_group.front()++;
+				y_set.front().insert(y_set.front().begin(), y);
 			}
 			else {
-				y_set.push_back(next_y);
-				y_group.back()++;
+				y_set.back().push_back(y);
 			}
 
 			cout << " --> not good" << endl;
@@ -337,12 +377,14 @@ void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_m
 			S = findNextVerticalSplit(S_max, h_max, y, dir, next_y);
 			if (S >= tau_max * 0.75f) {
 				if (dir == -1) {
-					y_set.insert(y_set.begin(), next_y);
-					y_group.insert(y_group.begin(), 1);
+					y_set.insert(y_set.begin(), vector<int>());
+					y_set.front().push_back(next_y);
+					y_set.front().push_back(y);
 				}
 				else {
-					y_set.push_back(next_y);
-					y_group.push_back(1);
+					y_set.push_back(vector<int>());
+					y_set.back().push_back(y);
+					y_set.back().push_back(next_y);
 				}
 				y = next_y + h_max(next_y, 0) * dir;
 			}
@@ -395,7 +437,7 @@ float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float
 	return S;
 }
 
-void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<int>& x_set, vector<int>& x_group) {
+void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<vector<int>>& x_set) {
 	while (true) {
 		int next_x;
 		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, next_x);
@@ -404,23 +446,19 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 
 		if (S >= tau_max * 0.75f) {
 			if (dir == -1) {
-				x_set.insert(x_set.begin(), next_x);
-				x_group.front()++;
+				x_set.front().insert(x_set.front().begin(), next_x);
 			}
 			else {
-				x_set.push_back(next_x);
-				x_group.back()++;
+				x_set.back().push_back(next_x);
 			}
 			x = next_x + w * dir;
 		}
 		else {
 			if (dir == -1) {
-				x_set.insert(x_set.begin(), next_x);
-				x_group.front()++;
+				x_set.front().insert(x_set.front().begin(), x);
 			}
 			else {
-				x_set.push_back(next_x);
-				x_group.back()++;
+				x_set.back().push_back(x);
 			}
 
 			cout << " --> not good" << endl;
@@ -428,12 +466,14 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 			S = findNextHorizontalSplit(S_max, w_max, x, dir, next_x);
 			if (S >= tau_max * 0.75f) {
 				if (dir == -1) {
-					x_set.insert(x_set.begin(), next_x);
-					x_group.insert(x_group.begin(), 1);
+					x_set.insert(x_set.begin(), vector<int>());
+					x_set.front().push_back(next_x);
+					x_set.front().push_back(x);
 				}
 				else {
-					x_set.push_back(next_x);
-					x_group.push_back(1);
+					x_set.push_back(vector<int>());
+					x_set.back().push_back(x);
+					x_set.back().push_back(next_x);
 				}
 				x = next_x + w_max(next_x, 0) * dir;
 			}
@@ -446,7 +486,7 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 	cout << "Terminated." << endl;
 }
 
-void verticalSplit(const cv::Mat& img, vector<int>& y_set, vector<int>& y_group, cv::Mat& IF) {
+void verticalSplit(const cv::Mat& img, vector<vector<int>>& y_set, cv::Mat& IF) {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
@@ -504,18 +544,19 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, vector<int>& y_group,
 		}
 	}
 
-	y_set.push_back(y);
-	y_group.push_back(1);
+	y_set.push_back(vector<int>(1, y));
 
 	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
 
 	// check splits
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set, y_group);
-	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_set, y_group);
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set);
+	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_set);
 
 	cout << "DEbug!!!!!!!!!!!!!!" << endl;
 	for (int i = 0; i < y_set.size(); ++i) {
-		cout << y_set[i] << ", ";
+		for (int j = 0; j < y_set[i].size(); ++j) {
+			cout << y_set[i][j] << ", ";
+		}
 	}
 	cout << endl;
 
@@ -526,7 +567,7 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, vector<int>& y_group,
 	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
 }
 
-void horizontalSplit(const cv::Mat& img, vector<int>& x_set, vector<int>& x_group) {
+void horizontalSplit(const cv::Mat& img, vector<vector<int>>& x_set) {
 	cv::Mat grayImg;
 
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
@@ -586,14 +627,13 @@ void horizontalSplit(const cv::Mat& img, vector<int>& x_set, vector<int>& x_grou
 		}
 	}
 
-	x_set.push_back(x);
-	x_group.push_back(1);
+	x_set.push_back(vector<int>(1, x));
 
 	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
 
 	// check splits
-	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set, x_group);
-	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set, x_group);
+	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
+	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
 
 	//sort(x_set.begin(), x_set.end());
 	hshrinkIF(IF, x_set, w_max);
@@ -656,7 +696,7 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
 	// compute Ver(y) and Hor(x) according to Equation (4)
 	Ver = cv::Mat_<float>(grayImg.rows, 1, 0.0f);
 	Hor = cv::Mat_<float>(1, grayImg.cols, 0.0f);
-	float sigma = 50.0f;
+	float sigma = 3.0f;// 50.0f;
 	float beta = 0.1f;
 	for (int r = 0; r < grayImg.rows; ++r) {
 		for (int rr = 0; rr < grayImg.rows; ++rr) {
@@ -665,7 +705,125 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
 	}
 	for (int c = 0; c < grayImg.cols; ++c) {
 		for (int cc = 0; cc < grayImg.cols; ++cc) {
-			Hor(0, c) += (ver_ytotal.at<float>(0, cc) - beta * hor_ytotal.at<float>(0, cc)) * utils::gause(cc - c, sigma);
+			Hor(0, c) += (hor_ytotal.at<float>(0, cc) - beta * ver_ytotal.at<float>(0, cc)) * utils::gause(cc - c, sigma);
+		}
+	}
+}
+
+void subdivideTile(cv::Mat& tile) {
+	cv::imwrite("tile.png", tile);
+
+	cv::Mat_<float> Ver;
+	cv::Mat_<float> Hor;
+	computeVerAndHor(tile, Ver, Hor);
+
+	// visualize Ver(y) and Hor(x)
+	outputTileStructure(tile, Ver, Hor, "tile2.png");
+
+
+	// find the local minima of Ver(y) and Hor(x)
+	vector<int> y_set;
+	for (int r = 1; r < Ver.rows - 1; ++r) {
+		if (Ver(r, 0) < Ver(r - 1, 0) && Ver(r, 0) < Ver(r + 1, 0)) {
+			y_set.push_back(r);
+		}
+	}
+	vector<int> x_set;
+	for (int c = 1; c < Hor.cols - 1; ++c) {
+		if (Hor(0, c) < Hor(0, c - 1) && Hor(0, c) < Hor(0, c + 1)) {
+			x_set.push_back(c);
+		}
+	}
+
+	//find the split closest to the boundary
+	int min_x_dist;
+	int min_x_index;
+	if (x_set[0] < tile.cols - x_set.back() - 1) {
+		min_x_dist = x_set[0];
+		min_x_index = 0;
+	}
+	else {
+		min_x_dist = tile.cols - x_set.back() - 1;
+		min_x_index = x_set.size() - 1;
+	}
+	int min_y_dist;
+	int min_y_index;
+	if (y_set[0] < tile.rows - y_set.back() - 1) {
+		min_y_dist = y_set[0];
+		min_y_index = 0;
+	}
+	else {
+		min_y_dist = tile.rows - y_set.back() - 1;
+		min_y_index = y_set.size() - 1;
+	}
+	int min_dist;
+	int min_index;
+	int dir = 0;	// 0 -- x / 1 -- y
+	int type = 0;	// 0 -- single / 1 -- dual
+	if (min_x_dist < min_y_dist) {
+		min_dist = min_x_dist;
+		min_index = min_x_index;
+		dir = 0;
+	}
+	else {
+		min_dist = min_y_dist;
+		min_index = min_y_index;
+		dir = 1;
+	}
+
+	// find the dual correspondence
+	int min_index2;
+	if (dir == 0) {
+		for (int i = 0; i < x_set.size(); ++i) {
+			if (i == min_index) continue;
+
+			int dist = min(x_set[i], tile.cols - x_set[i] - 1);
+			if (abs(dist - min_dist) < 3 && abs(x_set[i] - x_set[min_index]) > 3) {
+				type = 1;
+				min_index2 = i;
+				break;
+			}
+		}
+	}
+	else {
+		for (int i = 0; i < y_set.size(); ++i) {
+			if (i == min_index) continue;
+
+			int dist = min(y_set[i], tile.rows - y_set[i] - 1);
+			if (abs(dist - min_dist) < 3 && abs(y_set[i] - y_set[min_index]) > 3) {
+				type = 1;
+				min_index2 = i;
+				break;
+			}
+		}
+	}
+
+	// visualize the split lines
+	if (dir == 0) {
+		cv::line(tile, cv::Point(x_set[min_index], 0), cv::Point(x_set[min_index], tile.rows - 1), cv::Scalar(255, 0, 0), 3);
+	}
+	else {
+		cv::line(tile, cv::Point(0, y_set[min_index]), cv::Point(tile.cols - 1, y_set[min_index]), cv::Scalar(255, 0, 0), 3);
+	}
+
+	cv::imwrite("tile3.png", tile);
+}
+
+void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vector<int>>& x_set) {
+	for (int i = 0; i < y_set.size(); ++i) {
+		for (int j = 0; j < y_set[i].size() - 1; ++j) {
+			int y1 = y_set[i][j];
+			int y2 = y_set[i][j + 1];
+
+			for (int k = 0; k < x_set.size(); ++k) {
+				for (int l = 0; l < x_set[k].size() - 1; ++l) {
+					int x1 = x_set[k][l];
+					int x2 = x_set[k][l + 1];
+
+					cv::Mat tile(img, cv::Rect(x1, y1, x2 - x1 - 1, y2 - y1 - 1));
+					subdivideTile(tile);
+				}
+			}
 		}
 	}
 }
@@ -674,30 +832,44 @@ int main() {
 	cv::Mat img = cv::imread("../facade/facade.png");
 
 	// vertical split
-	vector<int> y_set;
-	vector<int> y_group;
+	vector<vector<int>> y_set;
 	cv::Mat IF;
-	verticalSplit(img, y_set, y_group, IF);
+	verticalSplit(img, y_set, IF);
+
+	// add the image boundary as split
+	if (y_set[0][0] > 0) {
+		y_set.insert(y_set.begin(), vector<int>());
+		y_set.front().push_back(0);
+		y_set.front().push_back(y_set[1][0]);
+	}
+	if (y_set.back().back() < img.rows - 1) {
+		y_set.push_back(vector<int>());
+		y_set.back().push_back(y_set[y_set.size() - 2].back());
+		y_set.back().push_back(img.rows - 1);
+	}
 
 	// horizontal split
-	vector<int> x_set;
-	vector<int> x_group;
+	vector<vector<int>> x_set;
 	cv::Mat imgIF;
 	createIFImage(IF, imgIF);
-	horizontalSplit(imgIF, x_set, x_group);
+	horizontalSplit(imgIF, x_set);
+
+	// add the image boundary as split
+	if (x_set[0][0] > 0) {
+		x_set.insert(x_set.begin(), vector<int>());
+		x_set.front().push_back(0);
+		x_set.front().push_back(x_set[1][0]);
+	}
+	if (x_set.back().back() < img.cols - 1) {
+		x_set.push_back(vector<int>());
+		x_set.back().push_back(x_set[x_set.size() - 2].back());
+		x_set.back().push_back(img.cols - 1);
+	}
 
 	outputFacadeStructure(img, y_set, x_set, "result3.png");
-
-	cout << "y_group: ";
-	for (int i = 0; i < y_group.size(); ++i) {
-		cout << y_group[i] << ", ";
-	}
-	cout << endl;
-	cout << "x_group: ";
-	for (int i = 0; i < x_group.size(); ++i) {
-		cout << x_group[i] << ", ";
-	}
-	cout << endl;
+	
+	subdivideFacadeTiles(img, y_set, x_set);
+	cv::imwrite("result4.png", img);
 
 	return 0;
 }
