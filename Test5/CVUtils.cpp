@@ -16,6 +16,15 @@ namespace cvutils {
 		return result.at<float>(0, 0);
 	}
 
+	float min(const cv::Mat& mat) {
+		cv::Mat result;
+
+		cv::reduce(mat, result, 0, CV_REDUCE_MIN);
+		cv::reduce(result, result, 1, CV_REDUCE_MIN);
+
+		return result.at<float>(0, 0);
+	}
+
 	void write(const string& filename, const cv::Mat& mat) {
 		ofstream out(filename);
 
