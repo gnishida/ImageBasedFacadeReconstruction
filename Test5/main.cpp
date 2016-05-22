@@ -120,15 +120,15 @@ void outputTileStructure(const cv::Mat& tile, const cv::Mat_<float>& Ver, const 
 				result.at<cv::Vec3b>(r, c) = tile.at<cv::Vec3b>(r, c);
 			}
 			else if (r < tile.rows - 1) {
-				int v1 = min(Ver(r, 0), Ver(r + 1, 0)) / (max_Ver - min_Ver) * 100;
-				int v2 = max(Ver(r, 0), Ver(r + 1, 0)) / (max_Ver - min_Ver) * 100;
+				int v1 = (min(Ver(r, 0), Ver(r + 1, 0)) - min_Ver) / (max_Ver - min_Ver) * 100;
+				int v2 = (max(Ver(r, 0), Ver(r + 1, 0)) - min_Ver) / (max_Ver - min_Ver) * 100;
 				if (c - tile.cols >= v1 && c - tile.cols <= v2) {
 					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
 				}
 			}
 			else if (c < tile.cols - 1) {
-				int v1 = min(Hor(0, c), Hor(0, c + 1)) / (max_Hor - min_Hor) * 100;
-				int v2 = max(Hor(0, c), Hor(0, c + 1)) / (max_Hor - min_Hor) * 100;
+				int v1 = (min(Hor(0, c), Hor(0, c + 1)) - min_Hor) / (max_Hor - min_Hor) * 100;
+				int v2 = (max(Hor(0, c), Hor(0, c + 1)) - min_Hor) / (max_Hor - min_Hor) * 100;
 				if (r - tile.rows >= v1 && r - tile.rows <= v2) {
 					result.at<cv::Vec3b>(r, c) = cv::Vec3b(0, 0, 0);
 				}
@@ -691,7 +691,7 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
 	cv::Mat hor_xtotal;
 	cv::Mat hor_ytotal;
 	cv::reduce(hor, hor_xtotal, 1, cv::REDUCE_SUM);
-	cv::reduce(ver, hor_ytotal, 0, cv::REDUCE_SUM);
+	cv::reduce(hor, hor_ytotal, 0, cv::REDUCE_SUM);
 
 	// compute Ver(y) and Hor(x) according to Equation (4)
 	Ver = cv::Mat_<float>(grayImg.rows, 1, 0.0f);
@@ -716,6 +716,12 @@ void subdivideTile(cv::Mat& tile) {
 	cv::Mat_<float> Ver;
 	cv::Mat_<float> Hor;
 	computeVerAndHor(tile, Ver, Hor);
+
+	ofstream out("Hor.txt");
+	for (int i = 0; i < Hor.cols; ++i) {
+		out << Hor(0, i) << endl;
+	}
+	out.close();
 
 	// visualize Ver(y) and Hor(x)
 	outputTileStructure(tile, Ver, Hor, "tile2.png");

@@ -72,7 +72,7 @@ int main() {
 	cv::Mat hor_xtotal;
 	cv::Mat hor_ytotal;
 	cv::reduce(hor, hor_xtotal, 1, cv::REDUCE_SUM);
-	cv::reduce(ver, hor_ytotal, 0, cv::REDUCE_SUM);
+	cv::reduce(hor, hor_ytotal, 0, cv::REDUCE_SUM);
 
 	// compute Ver(y) and Hor(x) according to Equation (4)
 	cv::Mat_<float> Ver(grayImg.rows, 1, 0.0f);
@@ -86,7 +86,7 @@ int main() {
 	}
 	for (int c = 0; c < grayImg.cols; ++c) {
 		for (int cc = 0; cc < grayImg.cols; ++cc) {
-			Hor(0, c) += (ver_ytotal.at<float>(0, cc) - beta * hor_ytotal.at<float>(0, cc)) * gause(cc - c, sigma);
+			Hor(0, c) += (hor_ytotal.at<float>(0, cc) - beta * ver_ytotal.at<float>(0, cc)) * gause(cc - c, sigma);
 		}
 	}
 
