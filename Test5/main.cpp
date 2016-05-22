@@ -304,7 +304,7 @@ float findNextVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>&
 	return S;
 }
 
-void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<int>& y_set) {
+void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<int>& y_set, vector<int>& y_group) {
 	while (true) {
 		int next_y;
 		float S = findAdjacentVerticalSplit(S_max, h_max, y, h, next_y);
@@ -312,15 +312,38 @@ void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_m
 		cout << "y: " << next_y << ", S: " << S << ", h: " << h_max(next_y, 0) << endl;
 
 		if (S >= tau_max * 0.75f) {
-			y_set.push_back(next_y);
+			if (dir == -1) {
+				y_set.insert(y_set.begin(), next_y);
+				y_group.front()++;
+			}
+			else {
+				y_set.push_back(next_y);
+				y_group.back()++;
+			}
 			y = next_y + h * dir;
 		}
 		else {
+			if (dir == -1) {
+				y_set.insert(y_set.begin(), next_y);
+				y_group.front()++;
+			}
+			else {
+				y_set.push_back(next_y);
+				y_group.back()++;
+			}
+
 			cout << " --> not good" << endl;
 
 			S = findNextVerticalSplit(S_max, h_max, y, dir, next_y);
 			if (S >= tau_max * 0.75f) {
-				y_set.push_back(next_y);
+				if (dir == -1) {
+					y_set.insert(y_set.begin(), next_y);
+					y_group.insert(y_group.begin(), 1);
+				}
+				else {
+					y_set.push_back(next_y);
+					y_group.push_back(1);
+				}
 				y = next_y + h_max(next_y, 0) * dir;
 			}
 			else {
@@ -372,7 +395,7 @@ float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float
 	return S;
 }
 
-void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<int>& x_set) {
+void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<int>& x_set, vector<int>& x_group) {
 	while (true) {
 		int next_x;
 		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, next_x);
@@ -380,15 +403,38 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 		cout << "x: " << next_x << ", S: " << S << ", w: " << w_max(0, next_x) << endl;
 
 		if (S >= tau_max * 0.75f) {
-			x_set.push_back(next_x);
+			if (dir == -1) {
+				x_set.insert(x_set.begin(), next_x);
+				x_group.front()++;
+			}
+			else {
+				x_set.push_back(next_x);
+				x_group.back()++;
+			}
 			x = next_x + w * dir;
 		}
 		else {
+			if (dir == -1) {
+				x_set.insert(x_set.begin(), next_x);
+				x_group.front()++;
+			}
+			else {
+				x_set.push_back(next_x);
+				x_group.back()++;
+			}
+
 			cout << " --> not good" << endl;
 
 			S = findNextHorizontalSplit(S_max, w_max, x, dir, next_x);
 			if (S >= tau_max * 0.75f) {
-				x_set.push_back(next_x);
+				if (dir == -1) {
+					x_set.insert(x_set.begin(), next_x);
+					x_group.insert(x_group.begin(), 1);
+				}
+				else {
+					x_set.push_back(next_x);
+					x_group.push_back(1);
+				}
 				x = next_x + w_max(next_x, 0) * dir;
 			}
 			else {
@@ -400,7 +446,7 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 	cout << "Terminated." << endl;
 }
 
-void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
+void verticalSplit(const cv::Mat& img, vector<int>& y_set, vector<int>& y_group, cv::Mat& IF) {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
@@ -459,25 +505,28 @@ void verticalSplit(const cv::Mat& img, vector<int>& y_set, cv::Mat& IF) {
 	}
 
 	y_set.push_back(y);
+	y_group.push_back(1);
 
 	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
 
 	// check splits
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set);
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, 1, y_set);
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set, y_group);
+	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_set, y_group);
 
-	sort(y_set.begin(), y_set.end());
+	cout << "DEbug!!!!!!!!!!!!!!" << endl;
+	for (int i = 0; i < y_set.size(); ++i) {
+		cout << y_set[i] << ", ";
+	}
+	cout << endl;
+
+	//sort(y_set.begin(), y_set.end());
 	vshrinkIF(IF, y_set, h_max);
-
-	// add the both ends of splits
-	y_set.insert(y_set.begin(), y_set[0] - h_max(y_set[0], 0));
-	y_set.push_back(y_set.back() + h_max(y_set.back(), 0));
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
 }
 
-void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
+void horizontalSplit(const cv::Mat& img, vector<int>& x_set, vector<int>& x_group) {
 	cv::Mat grayImg;
 
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
@@ -538,19 +587,16 @@ void horizontalSplit(const cv::Mat& img, vector<int>& x_set) {
 	}
 
 	x_set.push_back(x);
+	x_group.push_back(1);
 
 	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
 
 	// check splits
-	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
-	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
+	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set, x_group);
+	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set, x_group);
 
-	sort(x_set.begin(), x_set.end());
+	//sort(x_set.begin(), x_set.end());
 	hshrinkIF(IF, x_set, w_max);
-
-	// add the both ends of splits
-	x_set.insert(x_set.begin(), x_set[0] - w_max(0, x_set[0]));
-	x_set.push_back(x_set.back() + w_max(0, x_set.back()));
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureH(img, SH_max, w_max, x_set, "result2.png");
@@ -629,16 +675,29 @@ int main() {
 
 	// vertical split
 	vector<int> y_set;
+	vector<int> y_group;
 	cv::Mat IF;
-	verticalSplit(img, y_set, IF);
+	verticalSplit(img, y_set, y_group, IF);
 
 	// horizontal split
 	vector<int> x_set;
+	vector<int> x_group;
 	cv::Mat imgIF;
 	createIFImage(IF, imgIF);
-	horizontalSplit(imgIF, x_set);
+	horizontalSplit(imgIF, x_set, x_group);
 
 	outputFacadeStructure(img, y_set, x_set, "result3.png");
+
+	cout << "y_group: ";
+	for (int i = 0; i < y_group.size(); ++i) {
+		cout << y_group[i] << ", ";
+	}
+	cout << endl;
+	cout << "x_group: ";
+	for (int i = 0; i < x_group.size(); ++i) {
+		cout << x_group[i] << ", ";
+	}
+	cout << endl;
 
 	return 0;
 }
