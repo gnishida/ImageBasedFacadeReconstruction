@@ -829,13 +829,13 @@ bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist, int min_size) 
 
 	// find the local minima of Ver(y) and Hor(x)
 	vector<int> y_set;
-	for (int r = 1; r < Ver.rows - 1; ++r) {
+	for (int r = min_size; r < Ver.rows - min_size; ++r) {
 		if (Ver(r, 0) < Ver(r - 1, 0) && Ver(r, 0) < Ver(r + 1, 0)) {
 			y_set.push_back(r);
 		}
 	}
 	vector<int> x_set;
-	for (int c = 1; c < Hor.cols - 1; ++c) {
+	for (int c = min_size; c < Hor.cols - min_size; ++c) {
 		if (Hor(0, c) < Hor(0, c - 1) && Hor(0, c) < Hor(0, c + 1)) {
 			x_set.push_back(c);
 		}
