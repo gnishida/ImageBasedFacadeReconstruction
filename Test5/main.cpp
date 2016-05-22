@@ -19,13 +19,16 @@ using namespace std;
 
 class Subdivision {
 public:
+	static enum { TYPE_LEFT = 0, TYPE_RIGHT, TYPE_TOP, TYPE_BOTTOM };
+
+public:
 	int dir;
-	int type;
+	bool dual;
 	int dist;
 
 public:
-	Subdivision() : dir(0), type(0), dist(0) {}
-	Subdivision(int dir, int type, int dist) : dir(dir), type(type), dist(dist) {}
+	Subdivision() : dir(0), dual(false), dist(0) {}
+	Subdivision(int dir, int dual, int dist) : dir(dir), dual(dual), dist(dist) {}
 };
 
 void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<vector<int>>& y_set, const string& filename) {
@@ -163,7 +166,7 @@ void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivision
 				x1 += subdivisions[i].dist;
 				cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
 
-				if (subdivisions[i].type == 1) {
+				if (subdivisions[i].dual) {
 					x2 -= subdivisions[i].dist;
 					cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
 				}
@@ -171,7 +174,7 @@ void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivision
 			else {
 				x2 -= subdivisions[i].dist;
 				cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
-				if (subdivisions[i].type == 1) {
+				if (subdivisions[i].dual) {
 					x1 -= subdivisions[i].dist;
 					cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
 				}
@@ -181,7 +184,7 @@ void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivision
 			if (subdivisions[i].dist < (y2 - y1) * 0.5) {
 				y1 += subdivisions[i].dist;
 				cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
-				if (subdivisions[i].type == 1) {
+				if (subdivisions[i].dual) {
 					y2 -= subdivisions[i].dist;
 					cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
 				}
@@ -189,7 +192,7 @@ void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivision
 			else {
 				y2 -= subdivisions[i].dist;
 				cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
-				if (subdivisions[i].type == 1) {
+				if (subdivisions[i].dual) {
 					y1 -= subdivisions[i].dist;
 					cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
 				}
@@ -814,7 +817,7 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
  * tileを分割し、分割方向、分割タイプ、ボーダーからの距離を返却する。
  * 分割しない場合はfalseを返却する。
  */
-bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist, int min_size) {
+bool subdivideTile(cv::Mat& tile, Subdivision& subdivide, int min_size) {
 	if (tile.cols < min_size || tile.rows < min_size) return false;
 
 	cv::imwrite("tile.png", tile);
@@ -868,29 +871,29 @@ bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist, int min_size) 
 	}
 
 	// find the split closest to the boundary 
-	dist = numeric_limits<int>::max();
+	subdivide.dist = numeric_limits<int>::max();
 	int min_index = -1;
-	dir = 0;	// 0 -- x / 1 -- y
-	type = 0;	// 0 -- single / 1 -- dual
+	subdivide.dir = 0;	// 0 -- x / 1 -- y
+	subdivide.dual = false;
 	if (min_x_dist < min_y_dist) {
-		dist = min_x_dist;
+		subdivide.dist = min_x_dist;
 		min_index = min_x_index;
-		dir = 0;
+		subdivide.dir = 0;
 	}
 	else {
-		dist = min_y_dist;
+		subdivide.dist = min_y_dist;
 		min_index = min_y_index;
-		dir = 1;
+		subdivide.dir = 1;
 	}
 
 	// find the dual correspondence
-	if (dir == 0) {
+	if (subdivide.dir == 0) {
 		for (int i = 0; i < x_set.size(); ++i) {
 			if (i == min_index) continue;
 
 			int d = min(x_set[i], tile.cols - x_set[i] - 1);
-			if (abs(d - dist) < 3 && abs(x_set[i] - x_set[min_index]) > 3) {
-				type = 1;
+			if (abs(d - subdivide.dist) < 3 && abs(x_set[i] - x_set[min_index]) > 3) {
+				subdivide.dual = true;
 				break;
 			}
 		}
@@ -900,32 +903,12 @@ bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist, int min_size) 
 			if (i == min_index) continue;
 
 			int d = min(y_set[i], tile.rows - y_set[i] - 1);
-			if (abs(d - dist) < 3 && abs(y_set[i] - y_set[min_index]) > 3) {
-				type = 1;
+			if (abs(d - subdivide.dist) < 3 && abs(y_set[i] - y_set[min_index]) > 3) {
+				subdivide.dual = true;
 				break;
 			}
 		}
 	}
-
-	/*
-	// visualize the split lines
-	if (min_index >= 0) {
-		if (dir == 0) {
-			cv::line(tile, cv::Point(dist, 0), cv::Point(dist, tile.rows - 1), cv::Scalar(255, 0, 0), 3);
-			if (type == 1) {
-				cv::line(tile, cv::Point(tile.cols - 1 - dist, 0), cv::Point(tile.cols - 1 - dist, tile.rows - 1), cv::Scalar(255, 0, 0), 3);
-			}
-		}
-		else {
-			cv::line(tile, cv::Point(0, dist), cv::Point(tile.cols - 1, dist), cv::Scalar(255, 0, 0), 3);
-			if (type == 1) {
-				cv::line(tile, cv::Point(0, tile.rows - 1 - dist), cv::Point(tile.cols - 1, tile.rows - 1 - dist), cv::Scalar(255, 0, 0), 3);
-			}
-		}
-	}
-
-	cv::imwrite("tile3.png", tile);
-	*/
 
 	if (min_index >= 0) return true;
 	else return false;
@@ -938,13 +921,13 @@ void updateRegion(const Subdivision& subdivision, int& x1, int& y1, int& x2, int
 	if (subdivision.dir == 0) {
 		if (subdivision.dist < (x2 - x1) * 0.5) {
 			x1 += subdivision.dist;
-			if (subdivision.type == 1) {
+			if (subdivision.dual) {
 				x2 -= subdivision.dist;
 			}
 		}
 		else {
 			x2 -= subdivision.dist;
-			if (subdivision.type == 1) {
+			if (subdivision.dual) {
 				x1 -= subdivision.dist;
 			}
 		}
@@ -952,13 +935,13 @@ void updateRegion(const Subdivision& subdivision, int& x1, int& y1, int& x2, int
 	else {
 		if (subdivision.dist < (y2 - y1) * 0.5) {
 			y1 += subdivision.dist;
-			if (subdivision.type == 1) {
+			if (subdivision.dual) {
 				y2 -= subdivision.dist;
 			}
 		}
 		else {
 			y2 -= subdivision.dist;
-			if (subdivision.type == 1) {
+			if (subdivision.dual) {
 				y1 -= subdivision.dist;
 			}
 		}
@@ -993,9 +976,9 @@ bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vec
 					}
 
 					cv::Mat tile(img, cv::Rect(u1, v1, u2 - u1 - 1, v2 - v1 - 1));
-					int dir, type, dist;
-					if (subdivideTile(tile, dir, type, dist, max(x2 - x1, y2 - y1) * 0.2)) {
-						votes[i][k].push_back(Subdivision(dir, type, dist));
+					Subdivision subdivide;
+					if (subdivideTile(tile, subdivide, max(x2 - x1, y2 - y1) * 0.2)) {
+						votes[i][k].push_back(subdivide);
 					}
 				}
 			}
@@ -1010,22 +993,16 @@ bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vec
 			if (votes[i][j].size() == 0) continue;
 
 			subdivided = true;
-
-			// choose dir, x or y.
-			int x_cnt = 0;
-			int y_cnt = 0;
-			for (int s = 0; s < votes[i][j].size(); ++s) {
-				if (votes[i][j][s].dir == 0) {
-					x_cnt++;
-				}
-				else {
-					y_cnt++;
-				}
-			}
 						
-			// find the maximum vote
-			float sigma = 5.0f;
-			if (x_cnt > y_cnt) {
+			float sigma = 3.0f;
+
+			// find the maximum vote for horizontal split
+			float x_vote_max;
+			Subdivision x_subdivide(0, false, 0);
+			/*
+			int x_vote_dist;
+			bool x_vote_dual;*/
+			{
 				vector<float> histogram(x_set[j][1] - x_set[j][0], 0.0f);
 
 				for (int s = 0; s < votes[i][j].size(); ++s) {
@@ -1036,22 +1013,24 @@ bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vec
 					}
 				}
 
-				int dist = distance(histogram.begin(), max_element(histogram.begin(), histogram.end()));
+				x_vote_max = *max_element(histogram.begin(), histogram.end());
+				x_subdivide.dist = distance(histogram.begin(), max_element(histogram.begin(), histogram.end()));
 
 				// select the type
-				int type;
 				int min_dist = numeric_limits<int>::max();
 				for (int s = 0; s < votes[i][j].size(); ++s) {
-					int d = abs(votes[i][j][s].dist - dist);
+					int d = abs(votes[i][j][s].dist - x_subdivide.dist);
 					if (d < min_dist) {
 						min_dist = d;
-						type = votes[i][j][s].type;
+						x_subdivide.dual = votes[i][j][s].dual;
 					}
 				}
-
-				subdivisions[i][j].push_back(Subdivision(0, type, dist));
 			}
-			else {
+
+			// find the maximum vote for vertical split
+			float y_vote_max;
+			Subdivision y_subdivide(1, false, 0);
+			{
 				vector<float> histogram(y_set[j][1] - y_set[j][0], 0.0f);
 
 				for (int s = 0; s < votes[i][j].size(); ++s) {
@@ -1062,20 +1041,25 @@ bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vec
 					}
 				}
 
-				int dist = distance(histogram.begin(), max_element(histogram.begin(), histogram.end()));
+				y_vote_max = *max_element(histogram.begin(), histogram.end());
+				y_subdivide.dist = distance(histogram.begin(), max_element(histogram.begin(), histogram.end()));
 
 				// select the type
-				int type;
 				int min_dist = numeric_limits<int>::max();
 				for (int s = 0; s < votes[i][j].size(); ++s) {
-					int d = abs(votes[i][j][s].dist - dist);
+					int d = abs(votes[i][j][s].dist - y_subdivide.dist);
 					if (d < min_dist) {
 						min_dist = d;
-						type = votes[i][j][s].type;
+						y_subdivide.dual = votes[i][j][s].dual;
 					}
 				}
+			}
 
-				subdivisions[i][j].push_back(Subdivision(1, type, dist));
+			if (x_vote_max > y_vote_max) {
+				subdivisions[i][j].push_back(x_subdivide);
+			}
+			else {
+				subdivisions[i][j].push_back(y_subdivide);
 			}
 		}
 	}
