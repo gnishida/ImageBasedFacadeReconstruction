@@ -994,7 +994,7 @@ bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vec
 
 					cv::Mat tile(img, cv::Rect(u1, v1, u2 - u1 - 1, v2 - v1 - 1));
 					int dir, type, dist;
-					if (subdivideTile(tile, dir, type, dist, max(x2 - x1, y2 - y1) * 0.1)) {
+					if (subdivideTile(tile, dir, type, dist, max(x2 - x1, y2 - y1) * 0.2)) {
 						votes[i][k].push_back(Subdivision(dir, type, dist));
 					}
 				}
