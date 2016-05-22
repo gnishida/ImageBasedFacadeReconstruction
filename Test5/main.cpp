@@ -17,15 +17,15 @@
 
 using namespace std;
 
-class SubdivisionVote {
+class Subdivision {
 public:
 	int dir;
 	int type;
 	int dist;
 
 public:
-	SubdivisionVote() : dir(0), type(0), dist(0) {}
-	SubdivisionVote(int dir, int type, int dist) : dir(dir), type(type), dist(dist) {}
+	Subdivision() : dir(0), type(0), dist(0) {}
+	Subdivision(int dir, int type, int dist) : dir(dir), type(type), dist(dist) {}
 };
 
 void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<vector<int>>& y_set, const string& filename) {
@@ -149,6 +149,94 @@ void outputTileStructure(const cv::Mat& tile, const cv::Mat_<float>& Ver, const 
 	}
 
 	cv::imwrite(filename, result);
+}
+
+void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivisions, const cv::Scalar& color, int thickness) {
+	int x1 = 0;
+	int x2 = tile.cols - 1;
+	int y1 = 0;
+	int y2 = tile.rows - 1;
+
+	for (int i = 0; i < subdivisions.size(); ++i) {
+		if (subdivisions[i].dir == 0) {
+			if (subdivisions[i].dist < (x2 - x1) * 0.5) {
+				x1 += subdivisions[i].dist;
+				cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
+
+				if (subdivisions[i].type == 1) {
+					x2 -= subdivisions[i].dist;
+					cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
+				}
+			}
+			else {
+				x2 -= subdivisions[i].dist;
+				cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
+				if (subdivisions[i].type == 1) {
+					x1 -= subdivisions[i].dist;
+					cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
+				}
+			}
+		}
+		else {
+			if (subdivisions[i].dist < (y2 - y1) * 0.5) {
+				y1 += subdivisions[i].dist;
+				cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
+				if (subdivisions[i].type == 1) {
+					y2 -= subdivisions[i].dist;
+					cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
+				}
+			}
+			else {
+				y2 -= subdivisions[i].dist;
+				cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
+				if (subdivisions[i].type == 1) {
+					y1 -= subdivisions[i].dist;
+					cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
+				}
+			}
+		}
+	}
+}
+
+void outputFacadeAndTileStructure(const cv::Mat& img, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const vector<vector<vector<Subdivision>>>& subdivisions, const string& filename) {
+	cv::Mat img2 = img.clone();
+
+	// visualize the subdivision of tiles
+	for (int i = 0; i < y_set.size(); ++i) {
+		for (int j = 0; j < y_set[i].size() - 1; ++j) {
+			int y1 = y_set[i][j];
+			int y2 = y_set[i][j + 1];
+
+			for (int k = 0; k < x_set.size(); ++k) {
+				for (int l = 0; l < x_set[k].size() - 1; ++l) {
+					int x1 = x_set[k][l];
+					int x2 = x_set[k][l + 1];
+
+					int u1 = x1;
+					int u2 = x2;
+					int v1 = y1;
+					int v2 = y2;
+
+					cv::Mat tile(img2, cv::Rect(x1, y1, x2 - x1 - 1, y2 - y1 - 1));
+					drawSubdivisionOnTile(tile, subdivisions[i][k], cv::Scalar(255, 0, 0), 3);
+				}
+			}
+		}
+	}
+
+	// visualize the subdivision of facade
+	for (int i = 0; i < y_set.size(); ++i) {
+		for (int j = 0; j < y_set[i].size(); ++j) {
+			cv::line(img2, cv::Point(0, y_set[i][j]), cv::Point(img2.cols - 1, y_set[i][j]), cv::Scalar(0, 0, 255), 3);
+		}
+	}
+	for (int i = 0; i < x_set.size(); ++i) {
+		for (int j = 0; j < x_set[i].size(); ++j) {
+			cv::line(img2, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img2.rows - 1), cv::Scalar(0, 0, 255), 3);
+		}
+	}
+
+	cv::imwrite(filename, img2);
 }
 
 /**
@@ -722,7 +810,13 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
 	}
 }
 
-bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist) {
+/**
+ * tileを分割し、分割方向、分割タイプ、ボーダーからの距離を返却する。
+ * 分割しない場合はfalseを返却する。
+ */
+bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist, int min_size) {
+	if (tile.cols < min_size || tile.rows < min_size) return false;
+
 	cv::imwrite("tile.png", tile);
 
 	cv::Mat_<float> Ver;
@@ -837,8 +931,46 @@ bool subdivideTile(cv::Mat& tile, int& dir, int& type, int& dist) {
 	else return false;
 }
 
-void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vector<int>>& x_set) {
-	vector<vector<vector<SubdivisionVote>>> votes(y_set.size());
+/**
+ * 領域(x1,y1)-(x2,y2)を分割し、領域を更新する。
+ */
+void updateRegion(const Subdivision& subdivision, int& x1, int& y1, int& x2, int& y2) {
+	if (subdivision.dir == 0) {
+		if (subdivision.dist < (x2 - x1) * 0.5) {
+			x1 += subdivision.dist;
+			if (subdivision.type == 1) {
+				x2 -= subdivision.dist;
+			}
+		}
+		else {
+			x2 -= subdivision.dist;
+			if (subdivision.type == 1) {
+				x1 -= subdivision.dist;
+			}
+		}
+	}
+	else {
+		if (subdivision.dist < (y2 - y1) * 0.5) {
+			y1 += subdivision.dist;
+			if (subdivision.type == 1) {
+				y2 -= subdivision.dist;
+			}
+		}
+		else {
+			y2 -= subdivision.dist;
+			if (subdivision.type == 1) {
+				y1 -= subdivision.dist;
+			}
+		}
+	}
+}
+
+/**
+ * facadeの各tileを1ステップ、細かく分割し、subdivisionsに分割方法を追加する。
+ * 1つのタイルも分割しない場合はfalseを返却する。
+ */
+bool subdivideFacadeTilesByOneStep(cv::Mat& img, vector<vector<int>>& y_set, vector<vector<int>>& x_set, vector<vector<vector<Subdivision>>>& subdivisions) {
+	vector<vector<vector<Subdivision>>> votes(y_set.size());
 
 	for (int i = 0; i < y_set.size(); ++i) {
 		for (int j = 0; j < y_set[i].size() - 1; ++j) {
@@ -851,22 +983,34 @@ void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vecto
 					int x1 = x_set[k][l];
 					int x2 = x_set[k][l + 1];
 
-					cv::Mat tile(img, cv::Rect(x1, y1, x2 - x1 - 1, y2 - y1 - 1));
+					int u1 = x1;
+					int u2 = x2;
+					int v1 = y1;
+					int v2 = y2;
+
+					for (int s = 0; s < subdivisions[i][k].size(); ++s) {
+						updateRegion(subdivisions[i][k][s], u1, v1, u2, v2);
+					}
+
+					cv::Mat tile(img, cv::Rect(u1, v1, u2 - u1 - 1, v2 - v1 - 1));
 					int dir, type, dist;
-					if (subdivideTile(tile, dir, type, dist)) {
-						votes[i][k].push_back(SubdivisionVote(dir, type, dist));
+					if (subdivideTile(tile, dir, type, dist, max(x2 - x1, y2 - y1) * 0.1)) {
+						votes[i][k].push_back(Subdivision(dir, type, dist));
 					}
 				}
 			}
 		}
 	}
 
-	// choose the maximum vote for each type of tile
-	vector<vector<SubdivisionVote>> max_votes(votes.size());
-	for (int i = 0; i < votes.size(); ++i) {
-		max_votes[i].resize(votes[i].size());
+	bool subdivided = false;
 
+	// choose the maximum vote for each type of tile
+	for (int i = 0; i < votes.size(); ++i) {
 		for (int j = 0; j < votes[i].size(); ++j) {
+			if (votes[i][j].size() == 0) continue;
+
+			subdivided = true;
+
 			// choose dir, x or y.
 			int x_cnt = 0;
 			int y_cnt = 0;
@@ -878,13 +1022,10 @@ void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vecto
 					y_cnt++;
 				}
 			}
-
+						
 			// find the maximum vote
 			float sigma = 5.0f;
-			if (x_cnt == 0 && y_cnt == 0) {
-				max_votes[i][j] = SubdivisionVote(-1, 0, 0);
-			}
-			else if (x_cnt > y_cnt) {
+			if (x_cnt > y_cnt) {
 				vector<float> histogram(x_set[j][1] - x_set[j][0], 0.0f);
 
 				for (int s = 0; s < votes[i][j].size(); ++s) {
@@ -908,7 +1049,7 @@ void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vecto
 					}
 				}
 
-				max_votes[i][j] = SubdivisionVote(0, type, dist);
+				subdivisions[i][j].push_back(Subdivision(0, type, dist));
 			}
 			else {
 				vector<float> histogram(y_set[j][1] - y_set[j][0], 0.0f);
@@ -934,49 +1075,25 @@ void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vecto
 					}
 				}
 
-				max_votes[i][j] = SubdivisionVote(1, type, dist);
+				subdivisions[i][j].push_back(Subdivision(1, type, dist));
 			}
 		}
 	}
 
+	return subdivided;
+}
+
+void subdivideFacadeTiles(cv::Mat& img, vector<vector<int>>& y_set, vector<vector<int>>& x_set, vector<vector<vector<Subdivision>>>& subdivisions) {
+	subdivisions.resize(y_set.size());
 	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size() - 1; ++j) {
-			int y1 = y_set[i][j];
-			int y2 = y_set[i][j + 1];
-
-			for (int k = 0; k < x_set.size(); ++k) {
-				for (int l = 0; l < x_set[k].size() - 1; ++l) {
-					int x1 = x_set[k][l];
-					int x2 = x_set[k][l + 1];
-
-					cv::Mat tile(img, cv::Rect(x1, y1, x2 - x1 - 1, y2 - y1 - 1));
-
-					if (max_votes[i][k].dir == 0) {
-						cv::line(tile, cv::Point(max_votes[i][k].dist, 0), cv::Point(max_votes[i][k].dist, tile.rows - 1), cv::Scalar(255, 0, 0), 3);
-						if (max_votes[i][k].type == 1) {
-							cv::line(tile, cv::Point(tile.cols - 1 - max_votes[i][k].dist, 0), cv::Point(tile.cols - 1 - max_votes[i][k].dist, tile.rows - 1), cv::Scalar(255, 0, 0), 3);
-						}
-					}
-					else {
-						cv::line(tile, cv::Point(0, max_votes[i][k].dist), cv::Point(tile.cols - 1, max_votes[i][k].dist), cv::Scalar(255, 0, 0), 3);
-						if (max_votes[i][k].type == 1) {
-							cv::line(tile, cv::Point(0, tile.rows - 1 - max_votes[i][k].dist), cv::Point(tile.cols - 1, tile.rows - 1 - max_votes[i][k].dist), cv::Scalar(255, 0, 0), 3);
-						}
-					}
-				}
-			}
-		}
+		subdivisions[i].resize(x_set.size());
 	}
 
-	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cv::line(img, cv::Point(0, y_set[i][j]), cv::Point(img.cols - 1, y_set[i][j]), cv::Scalar(0, 0, 255), 3);
-		}
-	}
-	for (int i = 0; i < x_set.size(); ++i) {
-		for (int j = 0; j < x_set[i].size(); ++j) {
-			cv::line(img, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img.rows - 1), cv::Scalar(0, 0, 255), 3);
-		}
+	// 各tileを細かく分割する
+	while (true) {
+		if (!subdivideFacadeTilesByOneStep(img, y_set, x_set, subdivisions)) break;
+
+		outputFacadeAndTileStructure(img, y_set, x_set, subdivisions, "result4b.png");
 	}
 }
 
@@ -1020,8 +1137,9 @@ int main() {
 
 	outputFacadeStructure(img, y_set, x_set, "result3.png");
 	
-	subdivideFacadeTiles(img, y_set, x_set);
-	cv::imwrite("result4.png", img);
+	vector<vector<vector<Subdivision>>> subdivisions;
+	subdivideFacadeTiles(img, y_set, x_set, subdivisions);
+	outputFacadeAndTileStructure(img, y_set, x_set, subdivisions, "result4.png");
 
 	return 0;
 }
