@@ -11,5 +11,6 @@ namespace cvutils {
 	void write(const string& filename, const cv::Mat& mat);
 	cv::Mat read(const string& filename);
 
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename);
 }
 
