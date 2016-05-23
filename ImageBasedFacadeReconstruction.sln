@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2013
-VisualStudioVersion = 12.0.40629.0
+VisualStudioVersion = 12.0.30501.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ImageBasedFacadeReconstruction", "ImageBasedFacadeReconstruction\ImageBasedFacadeReconstruction.vcxproj", "{56230B87-5B41-4F9B-9CBD-C0D2310CAFA7}"
 EndProject
@@ -14,6 +14,8 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test4", "Test4\Test4.vcxproj", "{32E033D9-301C-4964-BC85-A8D68F66E741}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test5", "Test5\Test5.vcxproj", "{65577158-63E8-49AE-A08A-73649F587E06}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Test6", "Test6\Test6.vcxproj", "{490B79D7-C31F-458A-9A22-32B596944344}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -97,6 +99,18 @@ Global
 		{65577158-63E8-49AE-A08A-73649F587E06}.Release|Win32.Build.0 = Release|Win32
 		{65577158-63E8-49AE-A08A-73649F587E06}.Release|x64.ActiveCfg = Release|x64
 		{65577158-63E8-49AE-A08A-73649F587E06}.Release|x64.Build.0 = Release|x64
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|Mixed Platforms.Build.0 = Debug|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|Win32.ActiveCfg = Debug|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|Win32.Build.0 = Debug|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|x64.ActiveCfg = Debug|x64
+		{490B79D7-C31F-458A-9A22-32B596944344}.Debug|x64.Build.0 = Debug|x64
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|Mixed Platforms.ActiveCfg = Release|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|Mixed Platforms.Build.0 = Release|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|Win32.ActiveCfg = Release|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|Win32.Build.0 = Release|Win32
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|x64.ActiveCfg = Release|x64
+		{490B79D7-C31F-458A-9A22-32B596944344}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
