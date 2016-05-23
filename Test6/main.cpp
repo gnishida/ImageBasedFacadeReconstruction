@@ -1370,7 +1370,7 @@ void subdivideFacade(const cv::Mat& img) {
 }
 
 int main() {
-	cv::Mat img = cv::imread("../facade/facade2.png");
+	cv::Mat img = cv::imread("../facade/facade4.png");
 
 	subdivideFacade(img);
 
