@@ -637,7 +637,7 @@ float findNextVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>&
 	return S;
 }
 
-void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, vector<vector<int>>& y_set) {
+void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, const pair<int, int>& y_range, vector<int>& y_set) {
 	while (y >= 0 && y < S_max.rows) {
 		int next_y;
 		float S = findAdjacentVerticalSplit(S_max, h_max, y, h, next_y);
@@ -646,42 +646,25 @@ void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_m
 
 		if (S >= tau_max * 0.75f) {
 			if (dir == -1) {
-				y_set.front().insert(y_set.front().begin(), next_y);
+				y_set.insert(y_set.begin(), next_y);
 			}
 			else {
-				y_set.back().push_back(next_y);
+				y_set.push_back(next_y);
 			}
 			//y = next_y + h * dir;
 			y = next_y + h_max(next_y, 0) * dir;
 		}
 		else {
 			if (dir == -1) {
-				y_set.front().insert(y_set.front().begin(), y);
+				y_set.insert(y_set.begin(), y);
 			}
 			else {
-				y_set.back().push_back(y);
+				y_set.push_back(y);
 			}
 
 			cout << " --> not good" << endl;
 
-			S = findNextVerticalSplit(S_max, h_max, y, dir, h * 0.3, next_y);
-			if (S >= tau_max * 0.75f) {
-				if (dir == -1) {
-					y_set.insert(y_set.begin(), vector<int>());
-					y_set.front().push_back(next_y);
-					y_set.front().push_back(y);
-				}
-				else {
-					y_set.push_back(vector<int>());
-					y_set.back().push_back(y);
-					y_set.back().push_back(next_y);
-				}
-				y = next_y + h_max(next_y, 0) * dir;
-				h = h_max(next_y, 0);
-			}
-			else {
-				break;
-			}
+			break;
 		}
 	}
 
@@ -746,7 +729,7 @@ float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float
 	return S;
 }
 
-void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, vector<vector<int>>& x_set) {
+void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, const pair<int, int>& x_range, vector<int>& x_set) {
 	while (x >= 0 && x < S_max.cols) {
 		int next_x;
 		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, next_x);
@@ -755,46 +738,65 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 
 		if (S >= tau_max * 0.75f) {
 			if (dir == -1) {
-				x_set.front().insert(x_set.front().begin(), next_x);
+				x_set.insert(x_set.begin(), next_x);
 			}
 			else {
-				x_set.back().push_back(next_x);
+				x_set.push_back(next_x);
 			}
 			//x = next_x + w * dir;
 			x = next_x + w_max(0, next_x) * dir;
 		}
 		else {
 			if (dir == -1) {
-				x_set.front().insert(x_set.front().begin(), x);
+				x_set.insert(x_set.begin(), x);
 			}
 			else {
-				x_set.back().push_back(x);
+				x_set.push_back(x);
 			}
 
 			cout << " --> not good" << endl;
 
-			S = findNextHorizontalSplit(S_max, w_max, x, dir, w * 0.3, next_x);
-			if (S >= tau_max * 0.75f) {
-				if (dir == -1) {
-					x_set.insert(x_set.begin(), vector<int>());
-					x_set.front().push_back(next_x);
-					x_set.front().push_back(x);
-				}
-				else {
-					x_set.push_back(vector<int>());
-					x_set.back().push_back(x);
-					x_set.back().push_back(next_x);
-				}
-				x = next_x + w_max(0, next_x) * dir;
-				w = w_max(0, next_x);
-			}
-			else {
-				break;
-			}
+			break;
 		}
 	}
 
 	cout << "Terminated." << endl;
+}
+
+void verticalSplitSub(const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const pair<int, int>& y_range, vector<vector<int>>& y_set) {
+	// don't split too small region
+	if (y_range.second - y_range.first < 30) return;
+
+	// find the maximum of SV_max(x)
+	float S = 0.0f;
+	int y = -1;
+	for (int r = y_range.first; r <= y_range.second; ++r) {
+		if (r - h_max(r, 0) < y_range.first || r + h_max(r, 0) > y_range.second) continue;
+
+		if (SV_max(r, 0) > S) {
+			y = r;
+			S = SV_max(r, 0);
+		}
+	}
+
+	if (y == -1) return;
+
+	vector<int> y_set_sub;
+	y_set_sub.push_back(y);
+
+	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
+
+	// check splits
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_range, y_set_sub);
+	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_range, y_set_sub);
+
+	// recursively subdivide the upper remained region
+	verticalSplitSub(SV_max, h_max, make_pair(y_range.first, y_set_sub[0]), y_set);
+
+	y_set.push_back(y_set_sub);
+
+	// recursively subdivide the lower remained region
+	verticalSplitSub(SV_max, h_max, make_pair(y_set_sub.back(), y_range.second), y_set);
 }
 
 void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, vector<vector<int>>& y_set, cv::Mat& IF, const pair<int, int>& h_range) {
@@ -845,39 +847,49 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 	}
 	outputIF(IF, "IF1.png");
 
-	// find the maximum of SV_max(y)
-	float S = 0.0f;
-	int y;
-	for (int r = 0; r < SV_max.rows; ++r) {
-		if (SV_max(r, 0) > S) {
-			y = r;
-			S = SV_max(r, 0);
-		}
-	}
-
-	y_set.push_back(vector<int>(1, y));
-
-	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
-
-	outputSVMaxAndHMax(img, SV_max, h_max, "SV_max_h_max.png");
-
-	// check splits
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_set);
-	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_set);
-
-	cout << "DEbug!!!!!!!!!!!!!!" << endl;
-	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cout << y_set[i][j] << ", ";
-		}
-	}
-	cout << endl;
+	verticalSplitSub(SV_max, h_max, make_pair(0, img.rows - 1), y_set);
 
 	//sort(y_set.begin(), y_set.end());
 	vshrinkIF(IF, y_set, h_max);
 
 	// visualize S_max_V(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
+}
+
+void horizontalSplitSub(const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const pair<int, int>& x_range, vector<vector<int>>& x_set) {
+	// don't split too small region
+	if (x_range.second - x_range.first < 30) return;
+
+	// find the maximum of SH_max(x)
+	float S = 0.0f;
+	int x = -1;
+	for (int c = x_range.first; c <= x_range.second; ++c) {
+		if (c - w_max(0, c) < x_range.first || c + w_max(0, c) > x_range.second) continue;
+
+		if (SH_max(0, c) > S) {
+			x = c;
+			S = SH_max(0, c);
+		}
+	}
+
+	if (x == -1) return;
+
+	vector<int> x_set_sub;
+	x_set_sub.push_back(x);
+
+	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
+
+	// check splits
+	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_range, x_set_sub);
+	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_range, x_set_sub);
+
+	// recursively subdivide the left remained region
+	horizontalSplitSub(SH_max, w_max, make_pair(x_range.first, x_set_sub[0]), x_set);
+
+	x_set.push_back(x_set_sub);
+
+	// recursively subdivide the right remained region
+	horizontalSplitSub(SH_max, w_max, make_pair(x_set_sub.back(), x_range.second), x_set);
 }
 
 void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, vector<vector<int>>& x_set, const pair<int, int>& w_range) {
@@ -930,23 +942,7 @@ void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float
 	}
 	outputIF(IF, "IF11.png");
 
-	// find the maximum of SH_max(x)
-	float S = 0.0f;
-	int x;
-	for (int c = 0; c < SH_max.cols; ++c) {
-		if (SH_max(0, c) > S) {
-			x = c;
-			S = SH_max(0, c);
-		}
-	}
-
-	x_set.push_back(vector<int>(1, x));
-
-	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
-
-	// check splits
-	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_set);
-	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_set);
+	horizontalSplitSub(SH_max, w_max, make_pair(0, img.cols - 1), x_set);
 
 	//sort(x_set.begin(), x_set.end());
 	hshrinkIF(IF, x_set, w_max);
