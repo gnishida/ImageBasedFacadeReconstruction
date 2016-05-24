@@ -13,7 +13,10 @@ namespace cvutils {
 	void write(const string& filename, const cv::Mat& mat);
 	cv::Mat read(const string& filename);
 
+	float msd(const cv::Mat& img1, const cv::Mat& img2);
 	bool localMinimum(const cv::Mat& mat, int index, int num);
+	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const string& filename);
+	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const string& filename);
 	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename, int flag = 0);
 }
 

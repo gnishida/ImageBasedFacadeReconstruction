@@ -80,7 +80,7 @@ namespace cvutils {
 		vector<vector<float>> data;
 
 		regex re("[\\s,]+");
-		
+
 		while (!in.eof()) {
 			string str;
 			getline(in, str);
@@ -105,6 +105,26 @@ namespace cvutils {
 		}
 
 		return result;
+	}
+
+	/**
+	 * Return the mean squared differences between two images.
+	 *
+	 * @param img1		Image 1 (1-channel image)
+	 * @param img2		Image 2 (1-channel image)
+	 * @return			Mean squared differences
+	 */
+	float msd(const cv::Mat& img1, const cv::Mat& img2) {
+		float result = 0.0f;
+
+		for (int r = 0; r < img1.rows; ++r) {
+			for (int c = 0; c < img1.cols; ++c) {
+				int diff = img1.at<unsigned char>(r, c) - img2.at<unsigned char>(r, c);
+				result += diff * diff;
+			}
+		}
+
+		return result / img1.rows / img1.cols;
 	}
 
 	bool localMinimum(const cv::Mat& mat, int index, int num) {
@@ -166,6 +186,70 @@ namespace cvutils {
 		}
 
 		return localMinimum;
+	}
+
+	/**
+	* Output an image with vertical graph.
+	*
+	* @param img		Image (3-channel color image)
+	* @param ver		Vertical graph (Nx1 float-element matrix)
+	* @param filename	output file name
+	*/
+	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const string& filename) {
+		int graphSize = std::max(100.0, std::max(img.rows, img.cols) * 0.3);
+		int margin = 10;
+
+		cv::Mat result(img.rows, img.cols + graphSize + margin + 3, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// get the maximum value of Ver(y)
+		float max_ver = cvutils::max(ver);
+		float min_ver = cvutils::min(ver);
+
+		// draw vertical graph
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + margin + (ver.at<float>(r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + margin + (ver.at<float>(r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
+	/**
+	* Output an image with horizontal graph.
+	*
+	* @param img		Image (3-channel color image)
+	* @param ver		Horizontal graph (1xN float-element matrix)
+	* @param filename	output file name
+	*/
+	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const string& filename) {
+		int graphSize = std::max(100.0, std::max(img.rows, img.cols) * 0.3);
+		int margin = 10;
+
+		cv::Mat result(img.rows + graphSize + margin + 3, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// get the maximum value of Hor(x)
+		float max_hor = cvutils::max(hor);
+		float min_hor = cvutils::min(hor);
+
+		// draw horizontal graph
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + margin + (hor.at<float>(0, c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + margin + (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		cv::imwrite(filename, result);
 	}
 
 	/**
