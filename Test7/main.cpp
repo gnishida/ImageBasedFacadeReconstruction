@@ -328,6 +328,18 @@ void outputFacadeStructure(const cv::Mat& img, const vector<vector<int>>& y_set,
 	cv::imwrite(filename, result);
 }
 
+void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
+	cv::Mat result = img.clone();
+
+	for (int i = 0; i < y_set.size(); ++i) {
+		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), 3);
+	}
+	for (int i = 0; i < x_set.size(); ++i) {
+		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), 3);
+	}
+	cv::imwrite(filename, result);
+}
+
 void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivisions, const cv::Scalar& color, int thickness) {
 	int x1 = 0;
 	int x2 = tile.cols - 1;
@@ -763,7 +775,7 @@ void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w
 	cout << "Terminated." << endl;
 }
 
-void verticalSplitSub(const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const pair<int, int>& y_range, vector<vector<int>>& y_set) {
+void verticalSplitSub(const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const pair<int, int>& y_range, float tau_max, vector<vector<int>>& y_set) {
 	// don't split too small region
 	if (y_range.second - y_range.first < 30) return;
 
@@ -780,23 +792,28 @@ void verticalSplitSub(const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_ma
 	}
 
 	if (y == -1) return;
+	if (S < tau_max * 0.75f) return;
 
 	vector<int> y_set_sub;
 	y_set_sub.push_back(y);
 
 	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
 
+	if (tau_max == 0.0f) {
+		tau_max = S;
+	}
+
 	// check splits
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), S, -1, y_range, y_set_sub);
-	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), S, 1, y_range, y_set_sub);
+	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), tau_max, -1, y_range, y_set_sub);
+	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), tau_max, 1, y_range, y_set_sub);
 
 	// recursively subdivide the upper remained region
-	verticalSplitSub(SV_max, h_max, make_pair(y_range.first, y_set_sub[0]), y_set);
+	verticalSplitSub(SV_max, h_max, make_pair(y_range.first, y_set_sub[0]), tau_max, y_set);
 
 	y_set.push_back(y_set_sub);
 
 	// recursively subdivide the lower remained region
-	verticalSplitSub(SV_max, h_max, make_pair(y_set_sub.back(), y_range.second), y_set);
+	verticalSplitSub(SV_max, h_max, make_pair(y_set_sub.back(), y_range.second), tau_max, y_set);
 }
 
 void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, vector<vector<int>>& y_set, cv::Mat& IF, const pair<int, int>& h_range) {
@@ -847,7 +864,7 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 	}
 	outputIF(IF, "IF1.png");
 
-	verticalSplitSub(SV_max, h_max, make_pair(0, img.rows - 1), y_set);
+	verticalSplitSub(SV_max, h_max, make_pair(0, img.rows - 1), 0.0f, y_set);
 
 	//sort(y_set.begin(), y_set.end());
 	vshrinkIF(IF, y_set, h_max);
@@ -1353,6 +1370,76 @@ float getFloorHeight(const cv::Mat_<float>& h_max) {
 	return max_index;
 }
 
+void subdivideByVerAndHor(const cv::Mat_<float>& Ver, const cv::Mat_<float>& Hor, vector<int>& y_split, vector<int>& x_split) {
+	for (int r = 0; r < Ver.rows; ++r) {
+		if (cvutils::localMinimum(Ver, r, 3)) {
+			y_split.push_back(r);
+		}
+	}
+
+	for (int c = 0; c < Hor.cols; ++c) {
+		if (cvutils::localMinimum(Hor, c, 3)) {
+			x_split.push_back(c);
+		}
+	}
+}
+
+/**
+ * Ver(y)、Hor(x)に基づいて、元のfacadeにおけるsplit linesを求める。
+ *
+ * @param y_set				垂直方向のsymmetry line
+ * @param x_set				水平方向のsymmetry line
+ * @param y_split_IF		IF画像内での垂直方向のsplit line
+ * @param x_split_IF		IF画像内での水平方向のsplit line
+ * @param y_split			垂直方向のsplit line
+ * @param x_split			水平方向のsplit line
+ */
+void expandSubdivisionToFullFacade(const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const vector<int>& y_split_IF, const vector<int>& x_split_IF, vector<int>& y_split, vector<int>& x_split) {
+	for (int s = 0; s < y_split_IF.size(); ++s) {
+		int IF_y = 0;	// IF画像内でのy座標
+
+		for (int i = 0; i < y_set.size(); ++i) {
+			// もし、IF画像内でのsplit lineが、このsymmetry領域内なら、対応する全ての領域へexpandする
+			if (y_split_IF[s] >= IF_y && y_split_IF[s] < IF_y + y_set[i][1] - y_set[i][0]) {
+				int offset = y_split_IF[s] - IF_y;
+
+				for (int j = 0; j < y_set[i].size() - 1; ++j) {
+					y_split.push_back(y_set[i][j] + offset);
+				}
+
+				break;
+			}
+
+			IF_y += y_set[i][1] - y_set[i][0];
+			if (i < y_split_IF.size() - 1) {
+				IF_y += y_set[i + 1][0] - y_set[i].back();
+			}
+		}
+	}
+
+	for (int s = 0; s < x_split_IF.size(); ++s) {
+		int IF_x = 0;	// IF画像内でのx座標
+
+		for (int i = 0; i < x_set.size(); ++i) {
+			// もし、IF画像内でのsplit lineが、このsymmetry領域内なら、対応する全ての領域へexpandする
+			if (x_split_IF[s] >= IF_x && x_split_IF[s] < IF_x + x_set[i][1] - x_set[i][0]) {
+				int offset = x_split_IF[s] - IF_x;
+
+				for (int j = 0; j < x_set[i].size() - 1; ++j) {
+					x_split.push_back(x_set[i][j] + offset);
+				}
+
+				break;
+			}
+
+			IF_x += x_set[i][1] - x_set[i][0];
+			if (i < x_split_IF.size() - 1) {
+				IF_x += x_set[i + 1][0] - x_set[i].back();
+			}
+		}
+	}
+}
+
 void subdivideFacade(const cv::Mat& img) {
 	// vertical split
 	cv::Mat_<float> SV_max;
@@ -1400,12 +1487,27 @@ void subdivideFacade(const cv::Mat& img) {
 	float floor_height = getFloorHeight(h_max);
 	cout << "Floor height: " << floor_height << endl;
 
+	// subdivide IF
 	cv::Mat_<float> Ver;
 	cv::Mat_<float> Hor;
 	computeVerAndHor(imgIF, Ver, Hor, floor_height * 0.2);
-	cvutils::outputImageWithHorizontalAndVerticalGraph(imgIF, Ver, Hor, "facade_ver_hor.png");
+	cvutils::outputImageWithHorizontalAndVerticalGraph(imgIF, Ver, Hor, "facade_ver_hor.png", cvutils::GRAPH_LOCAL_MINIMUM);
 
-	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, "result3.png");
+	// get the best subdivision on IF
+	vector<int> y_split_IF;
+	vector<int> x_split_IF;
+	subdivideByVerAndHor(Ver, Hor, y_split_IF, x_split_IF);
+
+	// expand the subdivision to the full facade
+	vector<int> y_split;
+	vector<int> x_split;
+	expandSubdivisionToFullFacade(y_set, x_set, y_split_IF, x_split_IF, y_split, x_split);
+
+	outputFacadeStructure(img, y_split, x_split, "result3.png");
+
+
+
+	//outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, "result3.png");
 
 	vector<vector<vector<Subdivision>>> subdivisions;
 	subdivideFacadeTiles(img, y_set, x_set, subdivisions);
