@@ -1325,6 +1325,34 @@ void subdivideFacadeTiles(const cv::Mat& img, vector<vector<int>>& y_set, vector
 	}
 }
 
+/**
+ * h_max(y)の最も頻度の多い値を、フロアの高さとして返却する。
+ */
+float getFloorHeight(const cv::Mat_<float>& h_max) {
+	vector<float> histogram((int)cvutils::max(h_max), 0.0f);
+	
+	float sigma = 3.0f;
+
+	for (int r = 0; r < h_max.rows; ++r) {
+		if (h_max(r, 0) <= 2.0f) continue;
+
+		for (int i = 0; i < histogram.size(); ++i) {
+			histogram[i] += utils::gause(h_max(r, 0) - i, sigma);
+		}
+	}
+
+	float max_value = 0.0f;
+	int max_index = -1;
+	for (int i = 0; i < histogram.size(); ++i) {
+		if (histogram[i] > max_value) {
+			max_value = histogram[i];
+			max_index = i;
+		}
+	}
+
+	return max_index;
+}
+
 void subdivideFacade(const cv::Mat& img) {
 	// vertical split
 	cv::Mat_<float> SV_max;
@@ -1368,9 +1396,13 @@ void subdivideFacade(const cv::Mat& img) {
 		x_set.back().push_back(img.cols - 1);
 	}
 
+	// estimate the floor height
+	float floor_height = getFloorHeight(h_max);
+	cout << "Floor height: " << floor_height << endl;
+
 	cv::Mat_<float> Ver;
 	cv::Mat_<float> Hor;
-	computeVerAndHor(imgIF, Ver, Hor, 30.0f);
+	computeVerAndHor(imgIF, Ver, Hor, floor_height * 0.2);
 	cvutils::outputImageWithHorizontalAndVerticalGraph(imgIF, Ver, Hor, "facade_ver_hor.png");
 
 	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, "result3.png");
@@ -1382,7 +1414,7 @@ void subdivideFacade(const cv::Mat& img) {
 }
 
 int main() {
-	cv::Mat img = cv::imread("../facade/facade3.png");
+	cv::Mat img = cv::imread("../facade/facade4.png");
 
 	subdivideFacade(img);
 
