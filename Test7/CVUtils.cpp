@@ -107,6 +107,67 @@ namespace cvutils {
 		return result;
 	}
 
+	bool localMinimum(const cv::Mat& mat, int index, int num) {
+		bool localMinimum = true;
+
+		if (mat.rows == 1) {	// row vector
+			if (index == 0) {
+				localMinimum = false;
+			}
+			else {
+				for (int c = index; c > std::max(0, index - num); --c) {
+					if (mat.at<float>(0, c) >= mat.at<float>(0, c - 1)) {
+						localMinimum = false;
+						break;
+					}
+				}
+			}
+
+			if (localMinimum) {
+				if (index == mat.cols - 1) {
+					localMinimum = false;
+				}
+				else {
+					for (int c = index; c < std::min(mat.cols - 1, index + num); ++c) {
+						if (mat.at<float>(0, c) >= mat.at<float>(0, c + 1)) {
+							localMinimum = false;
+							break;
+						}
+					}
+				}
+			}
+		}
+		else if (mat.cols == 1) {	// column vector
+			if (index == 0) {
+				localMinimum = false;
+			}
+			else {
+				for (int r = index; r > std::max(0, index - num); --r) {
+					if (mat.at<float>(r, 0) >= mat.at<float>(r - 1, 0)) {
+						localMinimum = false;
+						break;
+					}
+				}
+			}
+
+			if (localMinimum) {
+				if (index == mat.rows - 1) {
+					localMinimum = false;
+				}
+				else {
+					for (int r = index; r < std::min(mat.rows - 1, index + num); ++r) {
+						if (mat.at<float>(r, 0) >= mat.at<float>(r + 1, 0)) {
+							localMinimum = false;
+							break;
+						}
+					}
+				}
+			}
+		}
+
+		return localMinimum;
+	}
+
 	/**
 	 * Output an image with vertical and horizontal graphs.
 	 *
@@ -115,7 +176,7 @@ namespace cvutils {
 	 * @param hor		Horizontal graph (1xN float-element matrix)
 	 * @param filename	output file name
 	 */
-	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename) {
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename, int flag) {
 		int graphSize = std::max(100.0, std::max(img.rows, img.cols) * 0.3);
 
 		cv::Mat result(img.rows + graphSize + 3, img.cols + graphSize + 3, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -136,6 +197,12 @@ namespace cvutils {
 			int x2 = img.cols + (ver.at<float>(r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
 
 			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+
+			if (flag & GRAPH_LOCAL_MINIMUM && r > 0) {
+				if (ver.at<float>(r, 0) < ver.at<float>(r - 1, 0) && ver.at<float>(r, 0) < ver.at<float>(r + 1, 0)) {
+					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), cv::Scalar(0, 0, 255), 2);
+				}
+			}
 		}
 
 		// draw horizontal graph
@@ -146,6 +213,12 @@ namespace cvutils {
 			int y2 = img.rows + (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+
+			if (flag & GRAPH_LOCAL_MINIMUM && c > 0) {
+				if (hor.at<float>(0, c) < hor.at<float>(0, c - 1) && hor.at<float>(0, c) < hor.at<float>(0, c + 1)) {
+					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), cv::Scalar(0, 0, 255), 2);
+				}
+			}
 		}
 
 		cv::imwrite(filename, result);
