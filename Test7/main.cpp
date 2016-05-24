@@ -1,7 +1,7 @@
 ﻿/**
 * 論文Image-based procedural modeling of facadesに基づいて、
 * Facadeを分割する。
-* Test5をさらにrefactoringする。
+* Test6をさらにrefactoringする。
 *
 * @author Gen Nishida
 * @version 1.0
