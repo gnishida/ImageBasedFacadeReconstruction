@@ -222,6 +222,11 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 	cv::imwrite(filename, result);
 }
 
+void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const string& filename) {
+	vector<vector<int>> x_set;
+	outputFacadeStructureH(img, S_max, w_max, x_set, filename);
+}
+
 void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const string& filename) {
 	float max_SV = cvutils::max(SV_max);
 	float min_SV = cvutils::min(SV_max);
@@ -959,6 +964,8 @@ void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float
 	}
 	outputIF(IF, "IF11.png");
 
+	outputFacadeStructureH(img, SH_max, w_max, "result2a.png");
+
 	horizontalSplitSub(SH_max, w_max, make_pair(0, img.cols - 1), x_set);
 
 	//sort(x_set.begin(), x_set.end());
@@ -1466,7 +1473,7 @@ void subdivideFacade(const cv::Mat& img) {
 	vector<vector<int>> x_set;
 	cv::Mat imgIF;
 	createIFImage(IF, imgIF);
-	horizontalSplit(imgIF, SH_max, w_max, x_set, IF, make_pair(30, 200));
+	horizontalSplit(imgIF, SH_max, w_max, x_set, IF, make_pair(80, 200));
 	createIFImage(IF, imgIF);
 
 	cv::imwrite("IF.png", imgIF);
