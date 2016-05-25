@@ -318,6 +318,13 @@ void outputIF(const cv::Mat& IF, const string& filename) {
 	cv::imwrite(filename, imgIF);
 }
 
+/**
+ * 2つの領域の類似度を返却する。
+ *
+ * @param R1		領域1 (1-channel image)
+ * @param R2		領域2 (1-channel image)
+ * @return			類似度
+ */
 float MI(const cv::Mat& R1, const cv::Mat& R2) {
 	return expf(-cvutils::msd(R1, R2) * 0.001f);
 
@@ -465,11 +472,15 @@ void hshrinkIF(cv::Mat& IF, const vector<vector<int>>& x_set, const cv::Mat_<flo
 	}
 }
 
-
-void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, const pair<int, int>& h_range) {
-	cv::Mat grayImg;
-	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
-
+/**
+* Facade画像のS_max(y)、h_max(y)を計算する。
+*
+* @param img		Facade画像 (1-channel image)
+* @param SV_max		S_max(y)
+* @param h_max		h_max(y)
+* @param h_range	range of h
+*/
+void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, const pair<int, int>& h_range) {
 	SV_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 	h_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 
@@ -483,16 +494,16 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 	}
 	else {
 		printf("computing");
-		for (int r = 0; r < grayImg.rows; ++r) {
-			printf("\rcomputing r = %d/%d  ", r, grayImg.rows);
+		for (int r = 0; r < img.rows; ++r) {
+			printf("\rcomputing r = %d/%d  ", r, img.rows);
 
 			cv::Mat_<float> SV(img.rows, 1, 0.0f);
 
 			for (int h = h_range.first; h <= h_range.second; ++h) {
-				if (r - h < 0 || r + h >= grayImg.rows) continue;
+				if (r - h < 0 || r + h >= img.rows) continue;
 
-				cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
-				cv::Mat R2 = grayImg(cv::Rect(0, r - h, grayImg.cols, h));
+				cv::Mat R1 = img(cv::Rect(0, r, img.cols, h));
+				cv::Mat R2 = img(cv::Rect(0, r - h, img.cols, h));
 				SV(h, 0) = MI(R1, R2);
 				
 				if (SV(h, 0) > SV_max(r, 0)) {
@@ -566,13 +577,17 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 	////////////////////////////////////////////////////////////////////////
 }
 
-void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, const pair<int, int>& w_range) {
-	cv::Mat grayImg;
-
-	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
-
-	SH_max = cv::Mat_<float>(1, grayImg.cols, 0.0f);
-	w_max = cv::Mat_<float>(1, grayImg.cols, 0.0f);
+/**
+ * Facade画像のS_max(x)、w_max(x)を計算する。
+ *
+ * @param img		Facade画像 (1-channel image)
+ * @param SH_max	S_max(x)
+ * @param w_max		w_max(x)
+ * @param w_range	range of w
+ */
+void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, const pair<int, int>& w_range) {
+	SH_max = cv::Mat_<float>(1, img.cols, 0.0f);
+	w_max = cv::Mat_<float>(1, img.cols, 0.0f);
 
 	ifstream in_SH("SH_max.txt");
 	ifstream in_w("w_max.txt");
@@ -584,16 +599,16 @@ void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float
 	}
 	else {
 		printf("computing");
-		for (int c = 0; c < grayImg.cols; ++c) {
-			printf("\rcomputing c = %d/%d  ", c, grayImg.cols);
+		for (int c = 0; c < img.cols; ++c) {
+			printf("\rcomputing c = %d/%d  ", c, img.cols);
 
-			cv::Mat_<float> SH(1, grayImg.cols, 0.0f);
+			cv::Mat_<float> SH(1, img.cols, 0.0f);
 
 			for (int w = w_range.first; w <= w_range.second; ++w) {
-				if (c - w < 0 || c + w >= grayImg.cols) continue;
+				if (c - w < 0 || c + w >= img.cols) continue;
 
-				cv::Mat R1 = grayImg(cv::Rect(c, 0, w, grayImg.rows));
-				cv::Mat R2 = grayImg(cv::Rect(c - w, 0, w, grayImg.rows));
+				cv::Mat R1 = img(cv::Rect(c, 0, w, img.rows));
+				cv::Mat R2 = img(cv::Rect(c - w, 0, w, img.rows));
 
 				SH(0, w) = MI(R1, R2);
 
@@ -1213,10 +1228,39 @@ void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SH_ma
 }
 
 void subdivideFacade(const cv::Mat& img) {
+	cv::Mat grayImg;
+	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
+
+	//////////////////////////////////////////////////////////////////////////////
+	// obtain edge image
+	cv::Mat grad;
+	cv::Mat grad_x;
+	cv::Mat grad_y;
+	cv::Mat abs_grad_x;
+	cv::Mat abs_grad_y;
+	cv::Sobel(grayImg, grad_x, CV_16S, 1, 0, 3, 1, 0, cv::BORDER_DEFAULT);
+	convertScaleAbs(grad_x, abs_grad_x);
+
+	//Scharr( src_gray, grad_y, ddepth, 0, 1, scale, delta, BORDER_DEFAULT );
+	cv::Sobel(grayImg, grad_y, CV_16S, 0, 1, 3, 1, 0, cv::BORDER_DEFAULT);
+	convertScaleAbs(grad_y, abs_grad_y);
+
+	/// Total Gradient (approximate)
+	addWeighted(abs_grad_x, 0.5, abs_grad_y, 0.5, 0, grad);
+
+	//cv::imwrite("grad.png", grad);
+	grad.convertTo(grayImg, CV_8U);
+	//cv::imwrite("grad2.png", grayImg);
+	//////////////////////////////////////////////////////////////////////////////
+
+
+
+
+
 	// vertical split
 	cv::Mat_<float> SV_max;
 	cv::Mat_<float> h_max;
-	verticalSplit(img, SV_max, h_max, make_pair(10, 40));
+	computeSV(grayImg, SV_max, h_max, make_pair(10, 40));
 
 	// visualize SV_max(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, "SV_max.png");
@@ -1228,7 +1272,7 @@ void subdivideFacade(const cv::Mat& img) {
 	// horizontal split
 	cv::Mat_<float> SH_max;
 	cv::Mat_<float> w_max;
-	horizontalSplit(img, SH_max, w_max, make_pair(10, 40));
+	computeSH(grayImg, SH_max, w_max, make_pair(10, 40));
 
 	// visualize SH_max(x) and w_max(x)
 	outputFacadeStructureH(img, SH_max, w_max, "SH_max.png");
