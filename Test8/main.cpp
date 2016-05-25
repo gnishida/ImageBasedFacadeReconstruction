@@ -1,7 +1,8 @@
 ﻿/**
 * 論文Image-based procedural modeling of facadesに基づいて、
 * Facadeを分割する。
-* Test6をさらにrefactoringする。
+* 5/24に第一回の報告をしたが、いろいろ難しいことが分かった。
+* まず、MIではうまくsymmetryをキャプチャできないケースがある。
 *
 * @author Gen Nishida
 * @version 1.0
@@ -41,98 +42,7 @@ public:
  * @param h_max		h_max
  * @param filename	output file name
  */
-void outputSVMaxAndHMax(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const string& filename) {
-	float max_S = cvutils::max(S_max);
-	float min_S = cvutils::min(S_max);
-	float max_h = cvutils::max(h_max);
-	float min_h = cvutils::min(h_max);
-
-	int graphSize = img.rows * 0.25;
-	int margin = graphSize * 0.2;
-	cv::Mat result(img.rows, img.cols + graphSize + max_h + margin * 3, CV_8UC3, cv::Scalar(255, 255, 255));
-
-	// copy img to result
-	cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
-	img.copyTo(roi);
-
-	// draw S_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + margin + (S_max(r, 0) - min_S) / (max_S - min_S) * graphSize;
-		int x2 = img.cols + margin + (S_max(r + 1, 0) - min_S) / (max_S - min_S) * graphSize;
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw h_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + graphSize + margin * 2 + h_max(r, 0);
-		int x2 = img.cols + graphSize + margin * 2 + h_max(r + 1, 0);
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw the horizontal line at the maximum, the second maximum, and the third maximum of S_max
-	float max_value1 = 0.0f;
-	int max_index1 = -1;
-	for (int r = 0; r < img.rows; ++r) {
-		/*
-		if (max_index1 >= 0) {
-			if (abs(r - max_index1) < h_max(max_index1, 0) && abs(r - max_index1) < h_max(r, 0)) continue;
-		}
-		if (max_index2 >= 0) {
-			if (abs(r - max_index2) < h_max(max_index2, 0) && abs(r - max_index2) < h_max(r, 0)) continue;
-		}
-		if (max_index3 >= 0) {
-			if (abs(r - max_index3) < h_max(max_index3, 0) && abs(r - max_index3) < h_max(r, 0)) continue;
-		}
-		*/
-
-		if (S_max(r, 0) > max_value1) {
-			max_value1 = S_max(r, 0);
-			max_index1 = r;
-		}
-	}
-
-	// draw the horizontal line at the maximum, the second maximum, and the third maximum of S_max
-	float max_value2 = 0.0f;
-	int max_index2 = -1;
-	for (int r = 0; r < img.rows; ++r) {
-		if (max_index1 >= 0) {
-			if (abs(r - max_index1) < h_max(max_index1, 0) && abs(r - max_index1) < h_max(r, 0)) continue;
-		}
-
-		if (S_max(r, 0) > max_value2) {
-			max_value2 = S_max(r, 0);
-			max_index2 = r;
-		}
-	}
-
-
-	float max_value3 = 0.0f;
-	int max_index3 = -1;
-	for (int r = 0; r < img.rows; ++r) {
-		if (max_index1 >= 0) {
-			if (abs(r - max_index1) < h_max(max_index1, 0) && abs(r - max_index1) < h_max(r, 0)) continue;
-		}
-		if (max_index2 >= 0) {
-			if (abs(r - max_index2) < h_max(max_index2, 0) && abs(r - max_index2) < h_max(r, 0)) continue;
-		}
-
-		if (S_max(r, 0) > max_value3) {
-			max_value3 = S_max(r, 0);
-			max_index3 = r;
-		}
-	}
-
-	cv::line(result, cv::Point(0, max_index1), cv::Point(img.cols - 1, max_index1), cv::Scalar(255, 0, 0), 3);
-	cv::line(result, cv::Point(0, max_index2), cv::Point(img.cols - 1, max_index2), cv::Scalar(0, 0, 255), 3);
-	cv::line(result, cv::Point(0, max_index3), cv::Point(img.cols - 1, max_index3), cv::Scalar(0, 255, 0), 3);
-
-
-	cv::imwrite(filename, result);
-}
-
-void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<vector<int>>& y_set, const string& filename) {
+void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<int>& y_set, const string& filename) {
 	float max_S = cvutils::max(S_max);
 	float min_S = cvutils::min(S_max);
 	float max_h = cvutils::max(h_max);
@@ -164,26 +74,18 @@ void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 
 	// draw the horizontal split lines
 	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cv::line(result, cv::Point(0, y_set[i][j]), cv::Point(img.cols - 1, y_set[i][j]), cv::Scalar(0, 0, 255), 1);
-		}
+		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols - 1, y_set[i]), cv::Scalar(0, 0, 255), 1);
 	}
-
-	// draw the horizontal line at the maximum of S_max
-	float max_value = 0.0f;
-	int max_index = -1;
-	for (int r = 0; r < img.rows; ++r) {
-		if (S_max(r, 0) > max_value) {
-			max_value = S_max(r, 0);
-			max_index = r;
-		}
-	}
-	cv::line(result, cv::Point(0, max_index), cv::Point(img.cols - 1, max_index), cv::Scalar(255, 0, 0), 1);
 
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<vector<int>>& x_set, const string& filename) {
+void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const string& filename) {
+	vector<int> y_set;
+	outputFacadeStructureV(img, S_max, h_max, y_set, filename);
+}
+
+void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<int>& x_set, const string& filename) {
 	float max_S = cvutils::max(S_max);
 	float min_S = cvutils::min(S_max);
 	float max_w = cvutils::max(w_max);
@@ -192,7 +94,7 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 	int graphSize = max(80.0, img.rows * 0.25);
 	int margin = graphSize * 0.2;
 	cv::Mat result(img.rows + graphSize + max_w + margin * 3, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
-	
+
 	// copy img to result
 	cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
 	img.copyTo(roi);
@@ -215,19 +117,18 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 
 	// draw the vertical split lines
 	for (int i = 0; i < x_set.size(); ++i) {
-		for (int j = 0; j < x_set[i].size(); ++j) {
-			cv::line(result, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img.rows - 1), cv::Scalar(0, 0, 255), 1);
-		}
+		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows - 1), cv::Scalar(0, 0, 255), 1);
 	}
+
 	cv::imwrite(filename, result);
 }
 
 void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const string& filename) {
-	vector<vector<int>> x_set;
+	vector<int> x_set;
 	outputFacadeStructureH(img, S_max, w_max, x_set, filename);
 }
 
-void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const string& filename) {
+void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
 	float max_SV = cvutils::max(SV_max);
 	float min_SV = cvutils::min(SV_max);
 	float max_h = cvutils::max(h_max);
@@ -279,58 +180,21 @@ void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, co
 
 	// draw the horizontal split lines
 	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cv::line(result, cv::Point(0, y_set[i][j]), cv::Point(img.cols - 1, y_set[i][j]), cv::Scalar(0, 0, 255), 1);
-		}
+		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols - 1, y_set[i]), cv::Scalar(0, 0, 255), 1);
 	}
 
 	// draw the vertical split lines
 	for (int i = 0; i < x_set.size(); ++i) {
-		for (int j = 0; j < x_set[i].size(); ++j) {
-			cv::line(result, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img.rows - 1), cv::Scalar(0, 0, 255), 1);
-		}
+		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows - 1), cv::Scalar(0, 0, 255), 1);
 	}
-
-	// draw the horizontal line at the maximum of SV_max
-	float max_value = 0.0f;
-	int max_index = -1;
-	for (int r = 0; r < img.rows; ++r) {
-		if (SV_max(r, 0) > max_value) {
-			max_value = SV_max(r, 0);
-			max_index = r;
-		}
-	}
-	cv::line(result, cv::Point(0, max_index), cv::Point(img.cols - 1, max_index), cv::Scalar(255, 0, 0), 1);
-
-	// draw the vertical line at the maximum of SH_max
-	max_value = 0.0f;
-	max_index = -1;
-	for (int c = 0; c < img.cols; ++c) {
-		if (SH_max(0, c) > max_value) {
-			max_value = SH_max(0, c);
-			max_index = c;
-		}
-	}
-	cv::line(result, cv::Point(max_index, 0), cv::Point(max_index, img.rows - 1), cv::Scalar(255, 0, 0), 1);
 
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeStructure(const cv::Mat& img, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const string& filename) {
-	cv::Mat result = img.clone();
-
-
-	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cv::line(result, cv::Point(0, y_set[i][j]), cv::Point(img.cols, y_set[i][j]), cv::Scalar(0, 0, 255), 3);
-		}
-	}
-	for (int i = 0; i < x_set.size(); ++i) {
-		for (int j = 0; j < x_set[i].size(); ++j) {
-			cv::line(result, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img.rows), cv::Scalar(0, 0, 255), 3);
-		}
-	}
-	cv::imwrite(filename, result);
+void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const string& filename) {
+	vector<int> x_set;
+	vector<int> y_set;
+	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, filename);
 }
 
 void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename) {
@@ -455,6 +319,9 @@ void outputIF(const cv::Mat& IF, const string& filename) {
 }
 
 float MI(const cv::Mat& R1, const cv::Mat& R2) {
+	return expf(-cvutils::msd(R1, R2) * 0.001f);
+
+	/*
 	cv::Mat_<float> Pab(256, 256, 0.0f);
 	cv::Mat_<float> Pa(256, 1, 0.0f);
 	cv::Mat_<float> Pb(256, 1, 0.0f);
@@ -501,6 +368,7 @@ float MI(const cv::Mat& R1, const cv::Mat& R2) {
 	}
 
 	return result;
+	*/
 }
 
 /**
@@ -597,241 +465,18 @@ void hshrinkIF(cv::Mat& IF, const vector<vector<int>>& x_set, const cv::Mat_<flo
 	}
 }
 
-/**
-* y_initialの周辺で、最適なsplit位置、yを探す。
-* その時のsimilarityを返却する。
-*/
-float findAdjacentVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y_initial, int h, int& y) {
-	y = y_initial;
-	float S = 0.0f;
-	if (abs(h_max(y_initial, 0) - h) <= 3) {
-		S = S_max(y, 0);
-	}
 
-	for (int r = y_initial - 3; r <= y_initial + 3; ++r) {
-		if (r < 0 || y >= h_max.rows) continue;
-		if (abs(h_max(r, 0) - h) > 3) continue;
-
-		if (S_max(r, 0) > S) {
-			y = r;
-			S = S_max(r, 0);
-		}
-	}
-
-	return S;
-}
-
-/**
-* yから開始し、上方向へ、最適なsplit位置、next_yを探す。
-* その時のsimilarityを返却する。
-*/
-float findNextVerticalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int dir, int min_h, int& next_y) {
-	float S = 0.0f;
-
-	int min_r;
-	int max_r;
-	if (dir == -1) {
-		min_r = 0;
-		max_r = y;
-	}
-	else if (dir == 1) {
-		min_r = y;
-		max_r = S_max.rows - 1;
-	}
-
-	for (int r = min_r; r < max_r; ++r) {
-		if (r + h_max(r, 0) * dir < min_r || r + h_max(r, 0) * dir > max_r) continue;
-		if (r - h_max(r, 0) * dir < min_r || r - h_max(r, 0) * dir > max_r) continue;
-
-		if (h_max(r, 0) < min_h) continue;
-
-		if (S_max(r, 0) > S) {
-			next_y = r;
-			S = S_max(r, 0);
-		}
-	}
-
-	return S;
-}
-
-void findVerticalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, int y, int h, float tau_max, int dir, const pair<int, int>& y_range, vector<int>& y_set) {
-	while (y >= 0 && y < S_max.rows) {
-		int next_y;
-		float S = findAdjacentVerticalSplit(S_max, h_max, y, h, next_y);
-
-		cout << "y: " << next_y << ", S: " << S << ", h: " << h_max(next_y, 0) << endl;
-
-		if (S >= tau_max * 0.75f) {
-			if (dir == -1) {
-				y_set.insert(y_set.begin(), next_y);
-			}
-			else {
-				y_set.push_back(next_y);
-			}
-			//y = next_y + h * dir;
-			y = next_y + h_max(next_y, 0) * dir;
-		}
-		else {
-			if (dir == -1) {
-				y_set.insert(y_set.begin(), y);
-			}
-			else {
-				y_set.push_back(y);
-			}
-
-			cout << " --> not good" << endl;
-
-			break;
-		}
-	}
-
-	cout << "Terminated." << endl;
-}
-
-/**
-* x_initialの周辺で、最適なsplit位置、xを探す。
-* その時のsimilarityを返却する。
-*/
-float findAdjacentHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x_initial, int w, int& x) {
-	x = x_initial;
-	float S = 0.0f;
-	if (abs(w_max(0, x_initial) - w) <= 3) {
-		S = S_max(0, x);
-	}
-
-	for (int c = x_initial - 3; c <= x_initial + 3; ++c) {
-		if (c < 0 || c >= w_max.cols) continue;
-		if (abs(w_max(0, c) - w) > 3) continue;
-		
-
-		if (S_max(0, c) > S) {
-			x = c;
-			S = S_max(0, c);
-		}
-	}
-
-	return S;
-}
-
-/**
-* x_startからdir方向へ探索し、次の最適なsplit位置、next_xを探す。
-* その時のsimilarityを返却する。
-*/
-float findNextHorizontalSplit(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int dir, int min_w, int& next_x) {
-	float S = 0.0f;
-
-	int min_c;
-	int max_c;
-	if (dir == -1) {
-		min_c = 0;
-		max_c = x;
-	}
-	else if (dir == 1) {
-		min_c = x;
-		max_c = S_max.cols - 1;
-	}
-
-	for (int c = min_c; c <= max_c; c++) {
-		if (c + w_max(0, c) * dir < min_c || c + w_max(0, c) * dir > max_c) continue;
-		if (c - w_max(0, c) * dir < min_c || c - w_max(0, c) * dir > max_c) continue;
-
-		if (w_max(0, c) < min_w) continue;
-
-		if (S_max(0, c) > S) {
-			next_x = c;
-			S = S_max(0, c);
-		}
-	}
-
-	return S;
-}
-
-void findHorizontalSplits(const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, int x, int w, float tau_max, int dir, const pair<int, int>& x_range, vector<int>& x_set) {
-	while (x >= 0 && x < S_max.cols) {
-		int next_x;
-		float S = findAdjacentHorizontalSplit(S_max, w_max, x, w, next_x);
-
-		cout << "x: " << next_x << ", S: " << S << ", w: " << w_max(0, next_x) << endl;
-
-		if (S >= tau_max * 0.75f) {
-			if (dir == -1) {
-				x_set.insert(x_set.begin(), next_x);
-			}
-			else {
-				x_set.push_back(next_x);
-			}
-			//x = next_x + w * dir;
-			x = next_x + w_max(0, next_x) * dir;
-		}
-		else {
-			if (dir == -1) {
-				x_set.insert(x_set.begin(), x);
-			}
-			else {
-				x_set.push_back(x);
-			}
-
-			cout << " --> not good" << endl;
-
-			break;
-		}
-	}
-
-	cout << "Terminated." << endl;
-}
-
-void verticalSplitSub(const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const pair<int, int>& y_range, float tau_max, vector<vector<int>>& y_set) {
-	// don't split too small region
-	if (y_range.second - y_range.first < 30) return;
-
-	// find the maximum of SV_max(x)
-	float S = 0.0f;
-	int y = -1;
-	for (int r = y_range.first; r <= y_range.second; ++r) {
-		if (r - h_max(r, 0) < y_range.first || r + h_max(r, 0) > y_range.second) continue;
-
-		if (SV_max(r, 0) > S) {
-			y = r;
-			S = SV_max(r, 0);
-		}
-	}
-
-	if (y == -1) return;
-	if (S < tau_max * 0.75f) return;
-
-	vector<int> y_set_sub;
-	y_set_sub.push_back(y);
-
-	cout << "y: " << y << ", S: " << S << ", h: " << h_max(y, 0) << endl;
-
-	if (tau_max == 0.0f) {
-		tau_max = S;
-	}
-
-	// check splits
-	findVerticalSplits(SV_max, h_max, y - h_max(y, 0), h_max(y, 0), tau_max, -1, y_range, y_set_sub);
-	findVerticalSplits(SV_max, h_max, y + h_max(y, 0), h_max(y, 0), tau_max, 1, y_range, y_set_sub);
-
-	// recursively subdivide the upper remained region
-	verticalSplitSub(SV_max, h_max, make_pair(y_range.first, y_set_sub[0]), tau_max, y_set);
-
-	y_set.push_back(y_set_sub);
-
-	// recursively subdivide the lower remained region
-	verticalSplitSub(SV_max, h_max, make_pair(y_set_sub.back(), y_range.second), tau_max, y_set);
-}
-
-void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, vector<vector<int>>& y_set, cv::Mat& IF, const pair<int, int>& h_range) {
+void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, const pair<int, int>& h_range) {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
 
 	SV_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 	h_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 
-	ifstream in_SV("SV_max.txt");
+	ifstream in_SV_max("SV_max.txt");
 	ifstream in_h("h_max.txt");
-	if (in_SV.good() && in_h.good()) {
-		in_SV.close();
+	if (in_SV_max.good() && in_h.good()) {
+		in_SV_max.close();
 		in_h.close();
 		SV_max = cvutils::read("SV_max.txt");
 		h_max = cvutils::read("h_max.txt");
@@ -841,14 +486,17 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 		for (int r = 0; r < grayImg.rows; ++r) {
 			printf("\rcomputing r = %d/%d  ", r, grayImg.rows);
 
+			cv::Mat_<float> SV(img.rows, 1, 0.0f);
+
 			for (int h = h_range.first; h <= h_range.second; ++h) {
 				if (r - h < 0 || r + h >= grayImg.rows) continue;
 
 				cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
 				cv::Mat R2 = grayImg(cv::Rect(0, r - h, grayImg.cols, h));
-				float S = MI(R1, R2);
-				if (S > SV_max(r, 0)) {
-					SV_max(r, 0) = S;
+				SV(h, 0) = MI(R1, R2);
+				
+				if (SV(h, 0) > SV_max(r, 0)) {
+					SV_max(r, 0) = SV(h, 0);
 					h_max(r, 0) = h;
 				}
 			}
@@ -860,61 +508,65 @@ void verticalSplit(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>&
 		cvutils::write("h_max.txt", h_max);
 	}
 
-	// initialize IF
-	IF = cv::Mat(grayImg.rows, grayImg.cols, CV_32FC4);
-	for (int r = 0; r < IF.rows; ++r) {
-		for (int c = 0; c < IF.cols; ++c) {
-			IF.at<cv::Vec4f>(r, c) = cv::Vec4f(img.at<cv::Vec3b>(r, c)[0], img.at<cv::Vec3b>(r, c)[1], img.at<cv::Vec3b>(r, c)[2], 1.0f);
+
+	////////////////////////////////////////////////////////////////////////
+	// DEBUG
+#if 0
+	{
+		cv::Mat_<float> histograms(grayImg.rows, 1, 0.0f);
+		int y0 = 147;
+		for (int r = 0; r < grayImg.rows; ++r) {
+			if (abs(r - y0) < 10) continue;
+
+			if (r < y0) {
+				int h = y0 - r;
+				if (y0 + h >= grayImg.rows) continue;
+				cv::Mat R1 = grayImg(cv::Rect(0, r, grayImg.cols, h));
+				cv::Mat R2 = grayImg(cv::Rect(0, r + h, grayImg.cols, h));
+				histograms(r, 0) += MI(R1, R2);
+			}
+			else {
+				int h = r - y0;
+				if (y0 - h < 0) continue;
+				cv::Mat R1 = grayImg(cv::Rect(0, y0 - h, grayImg.cols, h));
+				cv::Mat R2 = grayImg(cv::Rect(0, y0, grayImg.cols, h));
+				histograms(r, 0) += MI(R1, R2);
+			}
+		}
+
+		cvutils::outputImageWithVerticalGraph(img, histograms, "temp.png");
+
+		float max_value = 0.0f;
+		int max_index = -1;
+		for (int i = 0; i < histograms.rows; ++i) {
+			if (histograms(i, 0) > max_value) {
+				max_value = histograms(i, 0);
+				max_index = i;
+			}
+		}
+
+		if (max_index < y0) {
+			int h = y0 - max_index;
+			cv::Mat R1 = grayImg(cv::Rect(0, max_index, grayImg.cols, h));
+			cv::Mat R2 = grayImg(cv::Rect(0, max_index + h, grayImg.cols, h));
+			cv::imwrite("R1.png", R1);
+			cv::imwrite("R2.png", R2);
+			cout << "MSD: " << cvutils::msd(R1, R2) << endl;
+		}
+		else {
+			int h = max_index - y0;
+			cv::Mat R1 = grayImg(cv::Rect(0, y0 - h, grayImg.cols, h));
+			cv::Mat R2 = grayImg(cv::Rect(0, y0, grayImg.cols, h));
+			cv::imwrite("R1.png", R1);
+			cv::imwrite("R2.png", R2);
+			cout << "MSD: " << cvutils::msd(R1, R2) << endl;
 		}
 	}
-	outputIF(IF, "IF1.png");
-
-	verticalSplitSub(SV_max, h_max, make_pair(0, img.rows - 1), 0.0f, y_set);
-
-	//sort(y_set.begin(), y_set.end());
-	vshrinkIF(IF, y_set, h_max);
-
-	// visualize S_max_V(y) and h_max(y)
-	outputFacadeStructureV(img, SV_max, h_max, y_set, "result.png");
+#endif
+	////////////////////////////////////////////////////////////////////////
 }
 
-void horizontalSplitSub(const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const pair<int, int>& x_range, vector<vector<int>>& x_set) {
-	// don't split too small region
-	if (x_range.second - x_range.first < 30) return;
-
-	// find the maximum of SH_max(x)
-	float S = 0.0f;
-	int x = -1;
-	for (int c = x_range.first; c <= x_range.second; ++c) {
-		if (c - w_max(0, c) < x_range.first || c + w_max(0, c) > x_range.second) continue;
-
-		if (SH_max(0, c) > S) {
-			x = c;
-			S = SH_max(0, c);
-		}
-	}
-
-	if (x == -1) return;
-
-	vector<int> x_set_sub;
-	x_set_sub.push_back(x);
-
-	cout << "x: " << x << ", S: " << S << ", w: " << w_max(0, x) << endl;
-
-	// check splits
-	findHorizontalSplits(SH_max, w_max, x - w_max(0, x), w_max(0, x), S, -1, x_range, x_set_sub);
-	findHorizontalSplits(SH_max, w_max, x + w_max(0, x), w_max(0, x), S, 1, x_range, x_set_sub);
-
-	// recursively subdivide the left remained region
-	horizontalSplitSub(SH_max, w_max, make_pair(x_range.first, x_set_sub[0]), x_set);
-
-	x_set.push_back(x_set_sub);
-
-	// recursively subdivide the right remained region
-	horizontalSplitSub(SH_max, w_max, make_pair(x_set_sub.back(), x_range.second), x_set);
-}
-
-void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, vector<vector<int>>& x_set, cv::Mat& IF, const pair<int, int>& w_range) {
+void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, const pair<int, int>& w_range) {
 	cv::Mat grayImg;
 
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
@@ -935,15 +587,18 @@ void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float
 		for (int c = 0; c < grayImg.cols; ++c) {
 			printf("\rcomputing c = %d/%d  ", c, grayImg.cols);
 
+			cv::Mat_<float> SH(1, grayImg.cols, 0.0f);
+
 			for (int w = w_range.first; w <= w_range.second; ++w) {
 				if (c - w < 0 || c + w >= grayImg.cols) continue;
 
 				cv::Mat R1 = grayImg(cv::Rect(c, 0, w, grayImg.rows));
 				cv::Mat R2 = grayImg(cv::Rect(c - w, 0, w, grayImg.rows));
 
-				float S = MI(R1, R2);
-				if (S > SH_max(0, c)) {
-					SH_max(0, c) = S;
+				SH(0, w) = MI(R1, R2);
+
+				if (SH(0, w) > SH_max(0, c)) {
+					SH_max(0, c) = SH(0, w);
 					w_max(0, c) = w;
 				}
 			}
@@ -955,24 +610,62 @@ void horizontalSplit(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float
 		cvutils::write("w_max.txt", w_max);
 	}
 
-	// initialize IF
-	IF = cv::Mat(grayImg.rows, grayImg.cols, CV_32FC4);
-	for (int r = 0; r < IF.rows; ++r) {
-		for (int c = 0; c < IF.cols; ++c) {
-			IF.at<cv::Vec4f>(r, c) = cv::Vec4f(img.at<cv::Vec3b>(r, c)[0], img.at<cv::Vec3b>(r, c)[1], img.at<cv::Vec3b>(r, c)[2], 1.0f);
+
+	////////////////////////////////////////////////////////////////////////
+	// DEBUG
+#if 0
+	{
+		cv::Mat_<float> histograms(1, grayImg.cols, 0.0f);
+		int x0 = 153;
+		for (int c = 0; c < grayImg.cols; ++c) {
+			if (abs(c - x0) < 10) continue;
+
+			if (c < x0) {
+				int w = x0 - c;
+				if (x0 + w >= grayImg.cols) continue;
+				cv::Mat R1 = grayImg(cv::Rect(c, 0, w, grayImg.rows - 1));
+				cv::Mat R2 = grayImg(cv::Rect(c + w, 0, w, grayImg.rows - 1));
+				histograms(0, c) += MI(R1, R2);
+			}
+			else {
+				int w = c - x0;
+				if (x0 - w < 0) continue;
+				cv::Mat R1 = grayImg(cv::Rect(x0 - w, 0, w, grayImg.rows));
+				cv::Mat R2 = grayImg(cv::Rect(x0, 0, w, grayImg.rows));
+				histograms(0, c) += MI(R1, R2);
+			}
+		}
+
+		cvutils::outputImageWithHorizontalGraph(img, histograms, "temp.png");
+
+		float max_value = 0.0f;
+		int max_index = -1;
+		for (int i = 0; i < histograms.cols; ++i) {
+			if (histograms(0, i) > max_value) {
+				max_value = histograms(0, i);
+				max_index = i;
+			}
+		}
+
+		if (max_index < x0) {
+			int w = x0 - max_index;
+			cv::Mat R1 = grayImg(cv::Rect(max_index, 0, w, grayImg.rows - 1));
+			cv::Mat R2 = grayImg(cv::Rect(max_index + w, 0, w, grayImg.rows - 1));
+			cv::imwrite("R1.png", R1);
+			cv::imwrite("R2.png", R2);
+			cout << "MSD: " << cvutils::msd(R1, R2) << endl;
+		}
+		else {
+			int w = max_index - x0;
+			cv::Mat R1 = grayImg(cv::Rect(x0 - w, 0, w, grayImg.rows - 1));
+			cv::Mat R2 = grayImg(cv::Rect(x0, 0, w, grayImg.rows - 1));
+			cv::imwrite("R1.png", R1);
+			cv::imwrite("R2.png", R2);
+			cout << "MSD: " << cvutils::msd(R1, R2) << endl;
 		}
 	}
-	outputIF(IF, "IF11.png");
-
-	outputFacadeStructureH(img, SH_max, w_max, "result2a.png");
-
-	horizontalSplitSub(SH_max, w_max, make_pair(0, img.cols - 1), x_set);
-
-	//sort(x_set.begin(), x_set.end());
-	hshrinkIF(IF, x_set, w_max);
-
-	// visualize S_max_V(y) and h_max(y)
-	outputFacadeStructureH(img, SH_max, w_max, x_set, "result2.png");
+#endif
+	////////////////////////////////////////////////////////////////////////
 }
 
 /**
@@ -1350,99 +1043,171 @@ void subdivideFacadeTiles(const cv::Mat& img, vector<vector<int>>& y_set, vector
 }
 
 /**
- * h_max(y)の最も頻度の多い値を、フロアの高さとして返却する。
+ * Ver(y)の極小値をsplit lineの候補とし、S_max(y)に基づいて最適なsplit lineの組み合わせを探す。
+ *
+ * @param img			Facade画像 (3-channel image)
+ * @param SV_max		S_max(y)
+ * @param h_max			h_max(y)
+ * @param floor_height	floor height
+ * @param Ver			Ver(y)
+ * @param y_split		最適なsplit lineの組み合わせ
  */
-float getFloorHeight(const cv::Mat_<float>& h_max) {
-	vector<float> histogram((int)cvutils::max(h_max), 0.0f);
-	
-	float sigma = 3.0f;
+void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const float floor_height, const cv::Mat_<float>& Ver, vector<int>& y_split) {
+	y_split.clear();
 
-	for (int r = 0; r < h_max.rows; ++r) {
-		if (h_max(r, 0) <= 2.0f) continue;
-
-		for (int i = 0; i < histogram.size(); ++i) {
-			histogram[i] += utils::gause(h_max(r, 0) - i, sigma);
-		}
-	}
-
-	float max_value = 0.0f;
-	int max_index = -1;
-	for (int i = 0; i < histogram.size(); ++i) {
-		if (histogram[i] > max_value) {
-			max_value = histogram[i];
-			max_index = i;
-		}
-	}
-
-	return max_index;
-}
-
-void subdivideByVerAndHor(const cv::Mat_<float>& Ver, const cv::Mat_<float>& Hor, vector<int>& y_split, vector<int>& x_split) {
+	vector<int> y_potential;
 	for (int r = 0; r < Ver.rows; ++r) {
 		if (cvutils::localMinimum(Ver, r, 3)) {
-			y_split.push_back(r);
+			y_potential.push_back(r);
 		}
 	}
 
-	for (int c = 0; c < Hor.cols; ++c) {
-		if (cvutils::localMinimum(Hor, c, 3)) {
-			x_split.push_back(c);
+	vector<int> flags(y_potential.size(), 0);
+	float max_score = -numeric_limits<float>::max();
+	vector<int> max_flags(y_potential.size(), 0);
+	while (true) {
+		// compute the score
+		float score = 0.0f;
+		int y_prev = 0;
+		int count = 0;
+		bool valid = true;
+		for (int i = 0; i < flags.size(); ++i) {
+			if (flags[i] == 0) {
+				// このsplit lineを使用しないことによるペナルティ
+				score -= SV_max(y_potential[i], 0) * 0.5;
+				continue;
+			}
+
+			count++;
+
+			// １つ前のsplit lineとの距離をチェック
+			if (abs(y_potential[i] - y_prev) < 10 || abs(y_potential[i] - y_prev) > floor_height * 3.0f) {
+				valid = false;
+				break;
+			}
+
+			if (abs(y_potential[i] - y_prev - h_max(y_prev, 0)) < 5 || abs(y_potential[i] - y_prev - h_max(y_potential[i], 0)) < 5) {
+				score += SV_max(y_potential[i], 0);
+			}
+
+			y_prev = y_potential[i];
+		}
+
+		if (valid) {
+			score /= count;
+
+			// update the max score
+			if (score > max_score) {
+				max_score = score;
+				max_flags = flags;
+			}
+		}
+
+		// increment the flags
+		bool incremented = false;
+		for (int i = 0; i < flags.size(); ++i) {
+			if (flags[i] == 0) {
+				flags[i] = 1;
+				incremented = true;
+				break;
+			}
+			else {
+				flags[i] = 0;
+			}
+		}
+
+		if (!incremented) break;
+	}
+
+	// y_splitに、最適解を格納する
+	for (int i = 0; i < max_flags.size(); ++i) {
+		if (max_flags[i] == 1) {
+			y_split.push_back(y_potential[i]);
 		}
 	}
 }
 
 /**
- * Ver(y)、Hor(x)に基づいて、元のfacadeにおけるsplit linesを求める。
- *
- * @param y_set				垂直方向のsymmetry line
- * @param x_set				水平方向のsymmetry line
- * @param y_split_IF		IF画像内での垂直方向のsplit line
- * @param x_split_IF		IF画像内での水平方向のsplit line
- * @param y_split			垂直方向のsplit line
- * @param x_split			水平方向のsplit line
- */
-void expandSubdivisionToFullFacade(const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const vector<int>& y_split_IF, const vector<int>& x_split_IF, vector<int>& y_split, vector<int>& x_split) {
-	for (int s = 0; s < y_split_IF.size(); ++s) {
-		int IF_y = 0;	// IF画像内でのy座標
+* Hor(x)の極小値をsplit lineの候補とし、S_max(x)に基づいて最適なsplit lineの組み合わせを探す。
+*
+* @param img			Facade画像 (3-channel image)
+* @param SH_max			S_max(x)
+* @param w_max			w_max(x)
+* @param tile_width		tile width
+* @param Hor			Hor(x)
+* @param x_split		最適なsplit lineの組み合わせ
+*/
+void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const float tile_width, const cv::Mat_<float>& Hor, vector<int>& x_split) {
+	x_split.clear();
 
-		for (int i = 0; i < y_set.size(); ++i) {
-			// もし、IF画像内でのsplit lineが、このsymmetry領域内なら、対応する全ての領域へexpandする
-			if (y_split_IF[s] >= IF_y && y_split_IF[s] < IF_y + y_set[i][1] - y_set[i][0]) {
-				int offset = y_split_IF[s] - IF_y;
-
-				for (int j = 0; j < y_set[i].size() - 1; ++j) {
-					y_split.push_back(y_set[i][j] + offset);
-				}
-
-				break;
-			}
-
-			IF_y += y_set[i][1] - y_set[i][0];
-			if (i < y_split_IF.size() - 1) {
-				IF_y += y_set[i + 1][0] - y_set[i].back();
-			}
+	vector<int> x_potential;
+	for (int c = 0; c < Hor.cols; ++c) {
+		if (cvutils::localMinimum(Hor, c, 3)) {
+			x_potential.push_back(c);
 		}
 	}
 
-	for (int s = 0; s < x_split_IF.size(); ++s) {
-		int IF_x = 0;	// IF画像内でのx座標
+	vector<int> flags(x_potential.size(), 0);
+	float max_score = -numeric_limits<float>::max();
+	vector<int> max_flags(x_potential.size(), 0);
+	while (true) {
+		// compute the score
+		float score = 0.0f;
+		int x_prev = 0;
+		int count = 0;
+		bool valid = true;
+		for (int i = 0; i < flags.size(); ++i) {
+			if (flags[i] == 0) {
+				// このsplit lineを使用しないことによるペナルティ
+				score -= SH_max(0, x_potential[i]) * 0.5;
+				continue;
+			}
 
-		for (int i = 0; i < x_set.size(); ++i) {
-			// もし、IF画像内でのsplit lineが、このsymmetry領域内なら、対応する全ての領域へexpandする
-			if (x_split_IF[s] >= IF_x && x_split_IF[s] < IF_x + x_set[i][1] - x_set[i][0]) {
-				int offset = x_split_IF[s] - IF_x;
+			count++;
 
-				for (int j = 0; j < x_set[i].size() - 1; ++j) {
-					x_split.push_back(x_set[i][j] + offset);
-				}
-
+			// １つ前のsplit lineとの距離をチェック
+			if (abs(x_potential[i] - x_prev) < 10 || abs(x_potential[i] - x_prev) > tile_width * 3.0f) {
+				valid = false;
 				break;
 			}
 
-			IF_x += x_set[i][1] - x_set[i][0];
-			if (i < x_split_IF.size() - 1) {
-				IF_x += x_set[i + 1][0] - x_set[i].back();
+			if (abs(x_potential[i] - x_prev - w_max(0, x_prev)) < 5 || abs(x_potential[i] - x_prev - w_max(0, x_potential[i])) < 5) {
+				score += SH_max(0, x_potential[i]);
 			}
+
+			x_prev = x_potential[i];
+		}
+
+		if (valid) {
+			score /= count;
+
+			// update the max score
+			if (score > max_score) {
+				max_score = score;
+				max_flags = flags;
+			}
+		}
+
+		// increment the flags
+		bool incremented = false;
+		for (int i = 0; i < flags.size(); ++i) {
+			if (flags[i] == 0) {
+				flags[i] = 1;
+				incremented = true;
+				break;
+			}
+			else {
+				flags[i] = 0;
+			}
+		}
+
+		if (!incremented) break;
+	}
+
+	// x_splitに、最適解を格納する
+	for (int i = 0; i < max_flags.size(); ++i) {
+		if (max_flags[i] == 1) {
+			x_split.push_back(x_potential[i]);
 		}
 	}
 }
@@ -1451,54 +1216,61 @@ void subdivideFacade(const cv::Mat& img) {
 	// vertical split
 	cv::Mat_<float> SV_max;
 	cv::Mat_<float> h_max;
-	vector<vector<int>> y_set;
-	cv::Mat IF;
-	verticalSplit(img, SV_max, h_max, y_set, IF, make_pair(10, 40));
+	verticalSplit(img, SV_max, h_max, make_pair(10, 40));
 
-	// add the image boundary as split
-	if (y_set[0][0] > 0) {
-		y_set.insert(y_set.begin(), vector<int>());
-		y_set.front().push_back(0);
-		y_set.front().push_back(y_set[1][0]);
-	}
-	if (y_set.back().back() < img.rows - 1) {
-		y_set.push_back(vector<int>());
-		y_set.back().push_back(y_set[y_set.size() - 2].back());
-		y_set.back().push_back(img.rows - 1);
-	}
+	// visualize SV_max(y) and h_max(y)
+	outputFacadeStructureV(img, SV_max, h_max, "SV_max.png");
 
+	// estimate the floor height
+	float floor_height = cvutils::getMostPopularValue(h_max, 3, 3);
+	cout << "Floor height: " << floor_height << endl;
+	
 	// horizontal split
 	cv::Mat_<float> SH_max;
 	cv::Mat_<float> w_max;
-	vector<vector<int>> x_set;
-	cv::Mat imgIF;
-	createIFImage(IF, imgIF);
-	horizontalSplit(imgIF, SH_max, w_max, x_set, IF, make_pair(10, 40));
-	createIFImage(IF, imgIF);
+	horizontalSplit(img, SH_max, w_max, make_pair(10, 40));
 
-	cv::imwrite("IF.png", imgIF);
+	// visualize SH_max(x) and w_max(x)
+	outputFacadeStructureH(img, SH_max, w_max, "SH_max.png");
 
-	// add the image boundary as split
-	if (x_set[0][0] > 0) {
-		x_set.insert(x_set.begin(), vector<int>());
-		x_set.front().push_back(0);
-		x_set.front().push_back(x_set[1][0]);
-	}
-	if (x_set.back().back() < img.cols - 1) {
-		x_set.push_back(vector<int>());
-		x_set.back().push_back(x_set[x_set.size() - 2].back());
-		x_set.back().push_back(img.cols - 1);
-	}
+	float tile_width = cvutils::getMostPopularValue(w_max, 3, 3);
+	cout << "Tile width: " << tile_width << endl;
 
-	// estimate the floor height
-	float floor_height = getFloorHeight(h_max);
-	cout << "Floor height: " << floor_height << endl;
+	// visualize SV_max(y), h_max(y), SH_max(x) and w_max(x)
+	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, "SV_SH_max.png");
 
+	// compute Ver(y) and Hor(x)
+	cv::Mat_<float> Ver;
+	cv::Mat_<float> Hor;
+	computeVerAndHor(img, Ver, Hor, floor_height * 0.1);
+	
+	// potentialのsplit lineの中で、最適な組み合わせを探す
+	vector<int> y_split;
+	findBestHorizontalSplitLines(img, SV_max, h_max, floor_height, Ver, y_split);	
+	outputFacadeStructureV(img, SV_max, h_max, y_split, "facade_structure_V.png");
+	
+	// potentialのsplit lineの中で、最適な組み合わせを探す
+	vector<int> x_split;
+	findBestVerticalSplitLines(img, SH_max, w_max, tile_width, Hor, x_split);
+	outputFacadeStructureH(img, SH_max, w_max, x_split, "facade_structure_H.png");
+
+	// visualize the facade structure
+	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_split, x_split, "facade_structure.png");
+
+
+	/////////////////////////////////////////////////////////////////
+	// DEBUG
+	cvutils::outputImageWithHorizontalAndVerticalGraph(img, Ver, Hor, "facade_subdivision_by_ver_hor.png", cvutils::GRAPH_LOCAL_MINIMUM, 1);
+	/////////////////////////////////////////////////////////////////
+
+
+
+	/*
 	// subdivide IF
 	cv::Mat_<float> Ver;
 	cv::Mat_<float> Hor;
-	computeVerAndHor(imgIF, Ver, Hor, floor_height * 0.2);
-	cvutils::outputImageWithHorizontalAndVerticalGraph(imgIF, Ver, Hor, "facade_ver_hor.png", cvutils::GRAPH_LOCAL_MINIMUM);
+	computeVerAndHor(imgIF, Ver, Hor, floor_height * 0.1);
+	cvutils::outputImageWithHorizontalAndVerticalGraph(imgIF, Ver, Hor, "IF_subdivision_by_ver_hor.png", cvutils::GRAPH_LOCAL_MINIMUM, 1);
 
 	// get the best subdivision on IF
 	vector<int> y_split_IF;
@@ -1511,19 +1283,20 @@ void subdivideFacade(const cv::Mat& img) {
 	expandSubdivisionToFullFacade(y_set, x_set, y_split_IF, x_split_IF, y_split, x_split);
 
 	outputFacadeStructure(img, y_split, x_split, "result3.png");
-
+	*/
 
 
 	//outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, "result3.png");
 
+	/*
 	vector<vector<vector<Subdivision>>> subdivisions;
 	subdivideFacadeTiles(img, y_set, x_set, subdivisions);
 	outputFacadeAndTileStructure(img, y_set, x_set, subdivisions, "result4.png");
-
+	*/
 }
 
 int main() {
-	cv::Mat img = cv::imread("../facade/facade4.png");
+	cv::Mat img = cv::imread("../facade_small/facade1.png");
 
 	subdivideFacade(img);
 
