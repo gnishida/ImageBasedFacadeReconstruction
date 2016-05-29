@@ -445,7 +445,6 @@ namespace cvutils {
 
 		// draw vertical graph
 		cv::Mat blured_ver;
-		//cv::GaussianBlur(ver, blured_ver, cv::Size(5, 5), 0, 0);
 		for (int r = 0; r < img.rows - 1; ++r) {
 			int x1 = img.cols + (ver.at<float>(r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
 			int x2 = img.cols + (ver.at<float>(r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
@@ -454,7 +453,6 @@ namespace cvutils {
 
 			if (flag & LOCAL_MINIMUM && r > 0) {
 				if (isLocalMinimum(ver, r, 1)) {
-				//if (ver.at<float>(r, 0) < ver.at<float>(r - 1, 0) && ver.at<float>(r, 0) < ver.at<float>(r + 1, 0)) {
 					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), peak_color, lineWidth);
 				}
 			}
@@ -462,10 +460,7 @@ namespace cvutils {
 
 		// draw horizontal graph
 		cv::Mat blured_hor;
-		//cv::GaussianBlur(hor, blured_hor, cv::Size(5, 5), 0, 0);
 		for (int c = 0; c < img.cols - 1; ++c) {
-			//int y1 = result.rows - 1 - (hor.at<float>(0, c) - min_hor) / (max_hor - min_hor) * graphSize;
-			//int y2 = result.rows - 1 - (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 			int y1 = img.rows + (hor.at<float>(0, c) - min_hor) / (max_hor - min_hor) * graphSize;
 			int y2 = img.rows + (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
@@ -473,7 +468,6 @@ namespace cvutils {
 
 			if (flag & LOCAL_MINIMUM && c > 0) {
 				if (isLocalMinimum(hor, c, 1)) {
-				//if (hor.at<float>(0, c) < hor.at<float>(0, c - 1) && hor.at<float>(0, c) < hor.at<float>(0, c + 1)) {
 					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), peak_color, lineWidth);
 				}
 			}

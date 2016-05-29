@@ -16,6 +16,7 @@
 #include <opencv2/opencv.hpp>
 #include "CVUtils.h"
 #include "Utils.h"
+#include <time.h>
 
 using namespace std;
 
@@ -919,93 +920,57 @@ bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int 
 }
 
 /**
- * 領域(x1,y1)-(x2,y2)を分割し、領域を更新する。
- */
-void updateRegion(const Subdivision& subdivision, int& x1, int& y1, int& x2, int& y2) {
-	if (subdivision.dir == Subdivision::TYPE_LEFT) {
-		x1 += subdivision.dist;
-		if (subdivision.dual) {
-			x2 -= subdivision.dist;
-		}
-	}
-	else if (subdivision.dir == Subdivision::TYPE_RIGHT) {
-		x2 -= subdivision.dist;
-		if (subdivision.dual) {
-			x1 -= subdivision.dist;
-		}
-	}
-	else if (subdivision.dir == Subdivision::TYPE_TOP) {
-		y1 += subdivision.dist;
-		if (subdivision.dual) {
-			y2 -= subdivision.dist;
-		}
-	}
-	else if (subdivision.dir == Subdivision::TYPE_BOTTOM) {
-		y2 -= subdivision.dist;
-		if (subdivision.dual) {
-			y1 -= subdivision.dist;
-		}
-	}
-}
-
-/**
  * Ver(y)の極小値をsplit lineの候補とし、S_max(y)に基づいて最適なsplit lineの組み合わせを探す。
  *
- * @param img			Facade画像 (3-channel image)
- * @param SV_max		S_max(y)
- * @param h_max			h_max(y)
- * @param floor_height	floor height
  * @param Ver			Ver(y)
+ * @param min_interval	minimum floor height
+ * @param max_interval	maximum floor height
  * @param y_split		最適なsplit lineの組み合わせ
  */
-void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const float floor_height, const cv::Mat_<float>& Ver, vector<int>& y_split) {
+void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver, float min_interval, float max_interval, vector<int>& y_split) {
 	y_split.clear();
 
-	vector<int> y_potential;
-	for (int r = 0; r < Ver.rows; ++r) {
-		if (cvutils::isLocalMinimum(Ver, r, 3)) {
-			y_potential.push_back(r);
-		}
-	}
-
-	vector<int> flags(y_potential.size(), 0);
-	float max_score = -numeric_limits<float>::max();
-	vector<int> max_flags(y_potential.size(), 0);
+	vector<int> y_candidates = cvutils::getPeak(Ver, false, 1, cvutils::LOCAL_MINIMUM, 1);
+	
+	vector<int> flags(y_candidates.size(), 0);
+	float min_cost = numeric_limits<float>::max();
+	vector<int> best_flags(y_candidates.size(), 0);
+	printf("find best horizontal split lines: ");
+	int iter = 0;
 	while (true) {
-		// compute the score
-		float score = 0.0f;
+		printf("\rfind best horizontal split lines: %d", iter++);
+
+		// compute the cost
+		float cost = 0.0f;
 		int y_prev = 0;
 		int count = 0;
 		bool valid = true;
 		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) {
-				// このsplit lineを使用しないことによるペナルティ
-				score -= SV_max(y_potential[i], 0) * 0.5;
-				continue;
-			}
-
-			count++;
+			if (flags[i] == 0) continue;
 
 			// １つ前のsplit lineとの距離をチェック
-			if (abs(y_potential[i] - y_prev) < 10 || abs(y_potential[i] - y_prev) > floor_height * 3.0f) {
+			if (y_candidates[i] - y_prev < min_interval || y_candidates[i] - y_prev > max_interval) {
 				valid = false;
 				break;
 			}
 
-			if (abs(y_potential[i] - y_prev - h_max(y_prev, 0)) < 5 || abs(y_potential[i] - y_prev - h_max(y_potential[i], 0)) < 5) {
-				score += SV_max(y_potential[i], 0);
-			}
-
-			y_prev = y_potential[i];
+			cost += Ver(y_candidates[i], 0);
+			y_prev = y_candidates[i];
+			count++;
 		}
 
-		if (valid) {
-			score /= count;
+		// 最後のsplit lineとground levelとの距離をチェック
+		if (img.rows - 1 - y_prev < min_interval || img.rows - 1 - y_prev > max_interval) {
+			valid = false;
+		}
 
-			// update the max score
-			if (score > max_score) {
-				max_score = score;
-				max_flags = flags;
+		if (valid && cost > 0) {
+			cost /= count;
+
+			// update the min cost
+			if (cost < min_cost) {
+				min_cost = cost;
+				best_flags = flags;
 			}
 		}
 
@@ -1024,11 +989,12 @@ void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SV_
 
 		if (!incremented) break;
 	}
+	printf("\n");
 
 	// y_splitに、最適解を格納する
-	for (int i = 0; i < max_flags.size(); ++i) {
-		if (max_flags[i] == 1) {
-			y_split.push_back(y_potential[i]);
+	for (int i = 0; i < best_flags.size(); ++i) {
+		if (best_flags[i] == 1) {
+			y_split.push_back(y_candidates[i]);
 		}
 	}
 }
@@ -1036,61 +1002,59 @@ void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SV_
 /**
 * Hor(x)の極小値をsplit lineの候補とし、S_max(x)に基づいて最適なsplit lineの組み合わせを探す。
 *
-* @param img			Facade画像 (3-channel image)
-* @param SH_max			S_max(x)
-* @param w_max			w_max(x)
-* @param tile_width		tile width
 * @param Hor			Hor(x)
+* @param min_interval	minimum tile width
+* @param max_interval	maximum tile width
 * @param x_split		最適なsplit lineの組み合わせ
 */
-void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const float tile_width, const cv::Mat_<float>& Hor, vector<int>& x_split) {
+void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, vector<int>& x_split) {
 	x_split.clear();
 
-	vector<int> x_potential;
-	for (int c = 0; c < Hor.cols; ++c) {
-		if (cvutils::isLocalMinimum(Hor, c, 3)) {
-			x_potential.push_back(c);
-		}
-	}
+	vector<int> x_candidates = cvutils::getPeak(Hor, false, 1, cvutils::LOCAL_MAXIMUM, 1);
 
-	vector<int> flags(x_potential.size(), 0);
-	float max_score = -numeric_limits<float>::max();
-	vector<int> max_flags(x_potential.size(), 0);
+	vector<int> flags(x_candidates.size(), 0);
+	float min_cost = numeric_limits<float>::max();
+	vector<int> best_flags(x_candidates.size(), 0);
+	printf("find best vertical split lines: ");
+	int iter = 0;
 	while (true) {
-		// compute the score
-		float score = 0.0f;
+		printf("\rfind best vertical split lines: %d", iter);
+
+		// compute the cost
+		float cost = 0.0f;
 		int x_prev = 0;
 		int count = 0;
 		bool valid = true;
 		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) {
-				// このsplit lineを使用しないことによるペナルティ
-				score -= SH_max(0, x_potential[i]) * 0.5;
-				continue;
-			}
+			if (flags[i] == 0) continue;
 
-			count++;
 
 			// １つ前のsplit lineとの距離をチェック
-			if (abs(x_potential[i] - x_prev) < 10 || abs(x_potential[i] - x_prev) > tile_width * 3.0f) {
+			if (x_candidates[i] - x_prev < min_interval || x_candidates[i] - x_prev > max_interval) {
 				valid = false;
 				break;
 			}
 
-			if (abs(x_potential[i] - x_prev - w_max(0, x_prev)) < 5 || abs(x_potential[i] - x_prev - w_max(0, x_potential[i])) < 5) {
-				score += SH_max(0, x_potential[i]);
+			if (i == flags.size() - 1) {
+				// 最後のsplit lineと右端との距離をチェック
+				if (img.cols - 1 - x_candidates[i] < min_interval || img.cols - 1 - x_candidates[i] > max_interval) {
+					valid = false;
+					break;
+				}
 			}
 
-			x_prev = x_potential[i];
+			cost += Hor(0, x_candidates[i]);
+			x_prev = x_candidates[i];
+			count++;
 		}
 
-		if (valid) {
-			score /= count;
+		if (valid && cost > 0) {
+			cost /= count;
 
 			// update the max score
-			if (score > max_score) {
-				max_score = score;
-				max_flags = flags;
+			if (cost < min_cost) {
+				min_cost = cost;
+				best_flags = flags;
 			}
 		}
 
@@ -1109,18 +1073,17 @@ void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& SH_ma
 
 		if (!incremented) break;
 	}
+	printf("\n");
 
 	// x_splitに、最適解を格納する
-	for (int i = 0; i < max_flags.size(); ++i) {
-		if (max_flags[i] == 1) {
-			x_split.push_back(x_potential[i]);
+	for (int i = 0; i < best_flags.size(); ++i) {
+		if (best_flags[i] == 1) {
+			x_split.push_back(x_candidates[i]);
 		}
 	}
 }
 
 void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
-	split_positions = cvutils::getPeak(mat, false, 0, cvutils::LOCAL_MINIMUM);
-	/*
 	if (mat.cols == 1) {
 		for (int r = 0; r < mat.rows; ++r) {
 			if (cvutils::isLocalMinimum(mat, r, 1)) {
@@ -1135,7 +1098,6 @@ void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
 			}
 		}
 	}
-	*/
 	
 	if (split_positions.size() == 0 || split_positions[0] > 0) {
 		split_positions.insert(split_positions.begin(), 0);
@@ -1395,21 +1357,18 @@ void subdivideFacade(const cv::Mat& img) {
 	cvutils::outputImageWithHorizontalAndVerticalGraph(img, Ver, Hor, "facade_subdivision_by_ver_hor.png", cvutils::LOCAL_MINIMUM, 1);
 	/////////////////////////////////////////////////////////////////
 	
-#if 0
-	// potentialのsplit lineの中で、最適な組み合わせを探す
-	vector<int> y_split;
-	findBestHorizontalSplitLines(img, SV_max, h_max, floor_height, Ver, y_split);	
-	outputFacadeStructureV(img, SV_max, h_max, y_split, "facade_structure_V.png", 1);
-	
-	// potentialのsplit lineの中で、最適な組み合わせを探す
-	vector<int> x_split;
-	findBestVerticalSplitLines(img, SH_max, w_max, tile_width, Hor, x_split);
-	outputFacadeStructureH(img, SH_max, w_max, x_split, "facade_structure_H.png", 1);
+	time_t start = clock();
 
-	// visualize the facade structure
-	//outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_split, x_split, "facade_structure.png", 1);
-	outputFacadeStructure(img, y_split, x_split, "facade_structure.png", 1);
-#endif
+	// Facadeのsplit linesを求める
+	vector<int> y_split;
+	//findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
+	getSplitLines(Ver, y_split);
+	vector<int> x_split;
+	//findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
+	getSplitLines(Hor, x_split);
+	time_t end = clock();
+	cout << "Time: " << (end - start) << "msec." << endl;
+	outputFacadeStructure(img, y_split, x_split, "facade_subdivision.png", 1);
 
 	cv::Mat detected_edges;
 	cv::Canny(img, detected_edges, 30, 100, 3);
@@ -1439,13 +1398,8 @@ void subdivideFacade(const cv::Mat& img) {
 	cv::reduce(detected_horizontal_edges, horizontal_edge_max, 0, CV_REDUCE_MAX, CV_32F);
 #endif
 	
-	vector<int> y_split;
-	getSplitLines(Ver, y_split);
-	vector<int> x_split;
-	getSplitLines(Hor, x_split);
+	// 各tileの窓の位置を求める
 	vector<vector<cv::Rect>> window_rects;
-	outputFacadeStructure(img, y_split, x_split, "facade_subdivision.png", 1);
-
 	int window_count = 0;
 	window_rects.resize(y_split.size() - 1);
 	for (int i = 0; i < y_split.size() - 1; ++i) {
@@ -1464,6 +1418,7 @@ void subdivideFacade(const cv::Mat& img) {
 	cout << "Window count: " << window_count << endl;
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows.png");
 
+	// 窓の位置をalignする
 	refine(y_split, x_split, window_rects);
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
 }
