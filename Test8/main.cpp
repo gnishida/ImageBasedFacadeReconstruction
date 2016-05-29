@@ -954,12 +954,16 @@ void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver
 		indices.push_back(vector<int>(y_candidates.size(), -1));
 		nums.push_back(vector<int>(y_candidates.size(), 0));
 
-		for (int j = 0; j < y_candidates.size() - 1; ++j) {
-			for (int k = 0; k < y_candidates.size() - 1; ++k) {
+		for (int k = 0; k < y_candidates.size() - 1; ++k) {
+			bool found = false;
+
+			for (int j = k + 1; j < y_candidates.size() - 1; ++j) {
 				if (indices[i - 1][k] == -1) continue;
 
-				if (y_candidates[j] - y_candidates[k] < min_interval || y_candidates[j] - y_candidates[k] > max_interval) continue;
+				if (y_candidates[j] - y_candidates[k] < min_interval) continue;
+				if (found && y_candidates[j] - y_candidates[k] > max_interval) continue;
 
+				found = true;
 				float new_cost = costs[i - 1][k] + Ver(y_candidates[j], 0);
 				if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
 					costs[i][j] = new_cost;
@@ -1036,12 +1040,16 @@ void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, 
 		indices.push_back(vector<int>(x_candidates.size(), -1));
 		nums.push_back(vector<int>(x_candidates.size(), 0));
 
-		for (int j = 0; j < x_candidates.size() - 1; ++j) {
-			for (int k = 0; k < x_candidates.size() - 1; ++k) {
+		for (int k = 0; k < x_candidates.size() - 1; ++k) {
+			bool found = false;
+
+			for (int j = k + 1; j < x_candidates.size() - 1; ++j) {
 				if (indices[i - 1][k] == -1) continue;
 
-				if (x_candidates[j] - x_candidates[k] < min_interval || x_candidates[j] - x_candidates[k] > max_interval) continue;
+				if (x_candidates[j] - x_candidates[k] < min_interval) continue;
+				if (found && x_candidates[j] - x_candidates[k] > max_interval) continue;
 
+				found = true;
 				float new_cost = costs[i - 1][k] + Hor(0, x_candidates[j]);
 				if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
 					costs[i][j] = new_cost;
@@ -1361,11 +1369,11 @@ void subdivideFacade(const cv::Mat& img) {
 
 	// Facadeのsplit linesを求める
 	vector<int> y_split;
-	findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
-	//getSplitLines(Ver, y_split);
+	//findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
+	getSplitLines(Ver, y_split);
 	vector<int> x_split;
-	findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
-	//getSplitLines(Hor, x_split);
+	//findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
+	getSplitLines(Hor, x_split);
 	time_t end = clock();
 	cout << "Time: " << (end - start) << "msec." << endl;
 	outputFacadeStructure(img, y_split, x_split, "facade_subdivision.png", 1);
