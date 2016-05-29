@@ -931,71 +931,73 @@ void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver
 	y_split.clear();
 
 	vector<int> y_candidates = cvutils::getPeak(Ver, false, 1, cvutils::LOCAL_MINIMUM, 1);
+	y_candidates.insert(y_candidates.begin(), 0);
+	y_candidates.push_back(img.rows - 1);
 	
-	vector<int> flags(y_candidates.size(), 0);
-	float min_cost = numeric_limits<float>::max();
-	vector<int> best_flags(y_candidates.size(), 0);
-	printf("find best horizontal split lines: ");
-	int iter = 0;
-	while (true) {
-		printf("\rfind best horizontal split lines: %d", iter++);
+	vector<vector<float>> costs;
+	vector<vector<int>> indices;
+	vector<vector<int>> nums;
 
-		// compute the cost
-		float cost = 0.0f;
-		int y_prev = 0;
-		int count = 0;
-		bool valid = true;
-		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) continue;
-
-			// １つ前のsplit lineとの距離をチェック
-			if (y_candidates[i] - y_prev < min_interval || y_candidates[i] - y_prev > max_interval) {
-				valid = false;
-				break;
-			}
-
-			cost += Ver(y_candidates[i], 0);
-			y_prev = y_candidates[i];
-			count++;
-		}
-
-		// 最後のsplit lineとground levelとの距離をチェック
-		if (img.rows - 1 - y_prev < min_interval || img.rows - 1 - y_prev > max_interval) {
-			valid = false;
-		}
-
-		if (valid && cost > 0) {
-			cost /= count;
-
-			// update the min cost
-			if (cost < min_cost) {
-				min_cost = cost;
-				best_flags = flags;
-			}
-		}
-
-		// increment the flags
-		bool incremented = false;
-		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) {
-				flags[i] = 1;
-				incremented = true;
-				break;
-			}
-			else {
-				flags[i] = 0;
-			}
-		}
-
-		if (!incremented) break;
+	// 最初の行のコストを初期化
+	{
+		costs.push_back(vector<float>(y_candidates.size(), numeric_limits<float>::max()));
+		indices.push_back(vector<int>(y_candidates.size(), -1));
+		nums.push_back(vector<int>(y_candidates.size(), 0));
+		costs[0][0] = 0;
+		indices[0][0] = 0;
+		nums[0][0] = 0;
 	}
-	printf("\n");
+
+	// 2行目以降について、Dynamic Programmingで最小コストを計算
+	for (int i = 1; ; ++i) {
+		costs.push_back(vector<float>(y_candidates.size(), numeric_limits<float>::max()));
+		indices.push_back(vector<int>(y_candidates.size(), -1));
+		nums.push_back(vector<int>(y_candidates.size(), 0));
+
+		for (int j = 0; j < y_candidates.size() - 1; ++j) {
+			for (int k = 0; k < y_candidates.size() - 1; ++k) {
+				if (indices[i - 1][k] == -1) continue;
+
+				if (y_candidates[j] - y_candidates[k] < min_interval || y_candidates[j] - y_candidates[k] > max_interval) continue;
+
+				float new_cost = costs[i - 1][k] + Ver(y_candidates[j], 0);
+				if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
+					costs[i][j] = new_cost;
+					indices[i][j] = k;
+					nums[i][j] = nums[i - 1][k] + 1;
+				}
+			}
+		}
+
+		for (int k = 0; k < y_candidates.size(); ++k) {
+			if (indices[i - 1][k] == -1) continue;
+
+			if (y_candidates.back() - y_candidates[k] > max_interval) continue;
+
+			if (costs[i - 1][k] / nums[i - 1][k] < costs[i].back() / nums[i].back()) {
+				costs[i].back() = costs[i - 1][k];
+				indices[i].back() = k;
+				nums[i].back() = nums[i - 1][k];
+			}
+		}
+
+		// 最後のy以外がすべて-1なら、終了
+		bool updated = false;
+		for (int j = 0; j < indices[i].size() - 1; ++j) {
+			if (indices[i][j] != -1) updated = true;
+		}
+		if (!updated) break;
+	}
 
 	// y_splitに、最適解を格納する
-	for (int i = 0; i < best_flags.size(); ++i) {
-		if (best_flags[i] == 1) {
-			y_split.push_back(y_candidates[i]);
-		}
+	y_split.push_back(y_candidates.back());
+	int prev_index = y_candidates.size() - 1;
+	for (int i = indices.size() - 1; i >= 1; --i) {
+		int index = indices[i][prev_index];
+		if (index == prev_index) continue;
+
+		y_split.insert(y_split.begin(), y_candidates[index]);
+		prev_index = index;
 	}
 }
 
@@ -1010,76 +1012,74 @@ void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver
 void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, vector<int>& x_split) {
 	x_split.clear();
 
-	vector<int> x_candidates = cvutils::getPeak(Hor, false, 1, cvutils::LOCAL_MAXIMUM, 1);
+	vector<int> x_candidates = cvutils::getPeak(Hor, false, 1, cvutils::LOCAL_MINIMUM, 1);
+	x_candidates.insert(x_candidates.begin(), 0);
+	x_candidates.push_back(img.cols - 1);
 
-	vector<int> flags(x_candidates.size(), 0);
-	float min_cost = numeric_limits<float>::max();
-	vector<int> best_flags(x_candidates.size(), 0);
-	printf("find best vertical split lines: ");
-	int iter = 0;
-	while (true) {
-		printf("\rfind best vertical split lines: %d", iter);
+	vector<vector<float>> costs;
+	vector<vector<int>> indices;
+	vector<vector<int>> nums;
 
-		// compute the cost
-		float cost = 0.0f;
-		int x_prev = 0;
-		int count = 0;
-		bool valid = true;
-		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) continue;
+	// 最初の列のコストを初期化
+	{
+		costs.push_back(vector<float>(x_candidates.size(), numeric_limits<float>::max()));
+		indices.push_back(vector<int>(x_candidates.size(), -1));
+		nums.push_back(vector<int>(x_candidates.size(), 0));
+		costs[0][0] = 0;
+		indices[0][0] = 0;
+		nums[0][0] = 0;
+	}
 
+	// 2列目以降について、Dynamic Programmingで最小コストを計算
+	for (int i = 1;; ++i) {
+		costs.push_back(vector<float>(x_candidates.size(), numeric_limits<float>::max()));
+		indices.push_back(vector<int>(x_candidates.size(), -1));
+		nums.push_back(vector<int>(x_candidates.size(), 0));
 
-			// １つ前のsplit lineとの距離をチェック
-			if (x_candidates[i] - x_prev < min_interval || x_candidates[i] - x_prev > max_interval) {
-				valid = false;
-				break;
-			}
+		for (int j = 0; j < x_candidates.size() - 1; ++j) {
+			for (int k = 0; k < x_candidates.size() - 1; ++k) {
+				if (indices[i - 1][k] == -1) continue;
 
-			if (i == flags.size() - 1) {
-				// 最後のsplit lineと右端との距離をチェック
-				if (img.cols - 1 - x_candidates[i] < min_interval || img.cols - 1 - x_candidates[i] > max_interval) {
-					valid = false;
-					break;
+				if (x_candidates[j] - x_candidates[k] < min_interval || x_candidates[j] - x_candidates[k] > max_interval) continue;
+
+				float new_cost = costs[i - 1][k] + Hor(0, x_candidates[j]);
+				if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
+					costs[i][j] = new_cost;
+					indices[i][j] = k;
+					nums[i][j] = nums[i - 1][k] + 1;
 				}
 			}
-
-			cost += Hor(0, x_candidates[i]);
-			x_prev = x_candidates[i];
-			count++;
 		}
 
-		if (valid && cost > 0) {
-			cost /= count;
+		for (int k = 0; k < x_candidates.size(); ++k) {
+			if (indices[i - 1][k] == -1) continue;
 
-			// update the max score
-			if (cost < min_cost) {
-				min_cost = cost;
-				best_flags = flags;
+			if (x_candidates.back() - x_candidates[k] > max_interval) continue;
+
+			if (costs[i - 1][k] / nums[i - 1][k] < costs[i].back() / nums[i].back()) {
+				costs[i].back() = costs[i - 1][k];
+				indices[i].back() = k;
+				nums[i].back() = nums[i - 1][k];
 			}
 		}
 
-		// increment the flags
-		bool incremented = false;
-		for (int i = 0; i < flags.size(); ++i) {
-			if (flags[i] == 0) {
-				flags[i] = 1;
-				incremented = true;
-				break;
-			}
-			else {
-				flags[i] = 0;
-			}
+		// 最後のx以外がすべて-1なら、終了
+		bool updated = false;
+		for (int j = 0; j < indices[i].size() - 1; ++j) {
+			if (indices[i][j] != -1) updated = true;
 		}
-
-		if (!incremented) break;
+		if (!updated) break;
 	}
-	printf("\n");
 
 	// x_splitに、最適解を格納する
-	for (int i = 0; i < best_flags.size(); ++i) {
-		if (best_flags[i] == 1) {
-			x_split.push_back(x_candidates[i]);
-		}
+	x_split.push_back(x_candidates.back());
+	int prev_index = x_candidates.size() - 1;
+	for (int i = indices.size() - 1; i >= 1; --i) {
+		int index = indices[i][prev_index];
+		if (index == prev_index) continue;
+
+		x_split.insert(x_split.begin(), x_candidates[index]);
+		prev_index = index;
 	}
 }
 
@@ -1361,11 +1361,11 @@ void subdivideFacade(const cv::Mat& img) {
 
 	// Facadeのsplit linesを求める
 	vector<int> y_split;
-	//findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
-	getSplitLines(Ver, y_split);
+	findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
+	//getSplitLines(Ver, y_split);
 	vector<int> x_split;
-	//findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
-	getSplitLines(Hor, x_split);
+	findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
+	//getSplitLines(Hor, x_split);
 	time_t end = clock();
 	cout << "Time: " << (end - start) << "msec." << endl;
 	outputFacadeStructure(img, y_split, x_split, "facade_subdivision.png", 1);
@@ -1425,7 +1425,7 @@ void subdivideFacade(const cv::Mat& img) {
 
 int main() {
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade4.png");
 
 	subdivideFacade(img);
 
