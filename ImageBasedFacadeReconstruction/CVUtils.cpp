@@ -116,6 +116,29 @@ namespace cvutils {
 	 * @return			Mean squared differences
 	 */
 	double msd(const cv::Mat& img1, const cv::Mat& img2) {
+		cv::Mat diff_mat;
+		cv::absdiff(img1, img2, diff_mat);
+
+		cv::Mat sqr_mat;
+		if (img1.channels() == 1) {
+			cv::multiply(diff_mat, diff_mat, sqr_mat, 1, CV_32F);
+		}
+		else if (img1.channels() == 3) {
+			cv::multiply(diff_mat, diff_mat, sqr_mat, 1, CV_32FC3);
+		}
+
+		cv::Mat result;
+		cv::reduce(sqr_mat, result, 0, CV_REDUCE_SUM);
+		cv::reduce(result, result, 1, CV_REDUCE_SUM);
+		if (result.channels() == 1) {
+			return result.at<float>(0, 0) / img1.rows / img1.cols;
+		}
+		else if (result.channels() == 3) {
+			cv::Vec3f value = result.at<cv::Vec3f>(0, 0);
+			return (value[0] + value[1] + value[2]) / img1.rows / img1.cols;
+		}
+
+		/*
 		double result = 0.0f;
 
 		for (int r = 0; r < img1.rows; ++r) {
@@ -128,6 +151,7 @@ namespace cvutils {
 		}
 
 		return result;
+		*/
 	}
 
 	bool isLocalMinimum(const cv::Mat& mat, int index, int num) {

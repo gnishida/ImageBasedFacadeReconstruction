@@ -18,21 +18,25 @@
 #include "Utils.h"
 #include <time.h>
 
+#ifndef SQR
+#define	SQR(x)	((x) * (x))
+#endif
+
 using namespace std;
 
-class Subdivision {
+class Tile {
 public:
-	static enum { TYPE_LEFT = 0, TYPE_RIGHT, TYPE_TOP, TYPE_BOTTOM };
+	int x;
+	int y;
+	int width;
+	int height;
+	cv::Mat image;
 
 public:
-	int dir;
-	bool dual;
-	int dist;
-
-public:
-	Subdivision() : dir(0), dual(false), dist(0) {}
-	Subdivision(int dir, int dual, int dist) : dir(dir), dual(dual), dist(dist) {}
+	Tile() : x(0), y(0), width(0), height(0) {}
+	Tile(int x, int y, int width, int height, const cv::Mat& image) : x(x), y(y), width(width), height(height), image(image) {}
 };
+
 
 /**
  * Facade画像と合わせて、S_max(y)とh_max(y)を画像として保存する。
@@ -208,89 +212,6 @@ void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const v
 		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), lineWidth);
 	}
 	cv::imwrite(filename, result);
-}
-
-void drawSubdivisionOnTile(cv::Mat& tile, const vector<Subdivision>& subdivisions, const cv::Scalar& color, int thickness) {
-	int x1 = 0;
-	int x2 = tile.cols - 1;
-	int y1 = 0;
-	int y2 = tile.rows - 1;
-
-	for (int i = 0; i < subdivisions.size(); ++i) {
-		if (subdivisions[i].dir == Subdivision::TYPE_LEFT) {
-			x1 += subdivisions[i].dist;
-			cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
-			if (subdivisions[i].dual) {
-				x2 -= subdivisions[i].dist;
-				cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
-			}
-		}
-		else if (subdivisions[i].dir == Subdivision::TYPE_RIGHT) {
-			x2 -= subdivisions[i].dist;
-			cv::line(tile, cv::Point(x2, y1), cv::Point(x2, y2), color, thickness);
-			if (subdivisions[i].dual) {
-				x1 -= subdivisions[i].dist;
-				cv::line(tile, cv::Point(x1, y1), cv::Point(x1, y2), color, thickness);
-			}
-		}
-		else if (subdivisions[i].dir == Subdivision::TYPE_TOP) {
-			y1 += subdivisions[i].dist;
-			cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
-			if (subdivisions[i].dual) {
-				y2 -= subdivisions[i].dist;
-				cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
-			}
-		}
-		else if (subdivisions[i].dir == Subdivision::TYPE_BOTTOM) {
-			y2 -= subdivisions[i].dist;
-			cv::line(tile, cv::Point(x1, y2), cv::Point(x2, y2), color, thickness);
-			if (subdivisions[i].dual) {
-				y1 -= subdivisions[i].dist;
-				cv::line(tile, cv::Point(x1, y1), cv::Point(x2, y1), color, thickness);
-			}
-		}
-	}
-}
-
-void outputFacadeAndTileStructure(const cv::Mat& img, const vector<vector<int>>& y_set, const vector<vector<int>>& x_set, const vector<vector<vector<Subdivision>>>& subdivisions, const string& filename) {
-	cv::Mat img2 = img.clone();
-
-	// visualize the subdivision of tiles
-	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size() - 1; ++j) {
-			int y1 = y_set[i][j];
-			int y2 = y_set[i][j + 1];
-
-			for (int k = 0; k < x_set.size(); ++k) {
-				for (int l = 0; l < x_set[k].size() - 1; ++l) {
-					int x1 = x_set[k][l];
-					int x2 = x_set[k][l + 1];
-
-					int u1 = x1;
-					int u2 = x2;
-					int v1 = y1;
-					int v2 = y2;
-
-					cv::Mat tile(img2, cv::Rect(x1, y1, x2 - x1 - 1, y2 - y1 - 1));
-					drawSubdivisionOnTile(tile, subdivisions[i][k], cv::Scalar(255, 0, 0), 3);
-				}
-			}
-		}
-	}
-
-	// visualize the subdivision of facade
-	for (int i = 0; i < y_set.size(); ++i) {
-		for (int j = 0; j < y_set[i].size(); ++j) {
-			cv::line(img2, cv::Point(0, y_set[i][j]), cv::Point(img2.cols - 1, y_set[i][j]), cv::Scalar(0, 0, 255), 3);
-		}
-	}
-	for (int i = 0; i < x_set.size(); ++i) {
-		for (int j = 0; j < x_set[i].size(); ++j) {
-			cv::line(img2, cv::Point(x_set[i][j], 0), cv::Point(x_set[i][j], img2.rows - 1), cv::Scalar(0, 0, 255), 3);
-		}
-	}
-
-	cv::imwrite(filename, img2);
 }
 
 void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename) {
@@ -1107,18 +1028,36 @@ void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
 		}
 	}
 	
-	if (split_positions.size() == 0 || split_positions[0] > 0) {
+	if (split_positions.size() == 0) {
 		split_positions.insert(split_positions.begin(), 0);
+	}
+	else if (split_positions[0] > 0) {
+		if (split_positions[0] < 5) {
+			split_positions[0] = 0;
+		}
+		else {
+			split_positions.insert(split_positions.begin(), 0);
+		}
 	}
 
 	if (mat.cols == 1) {
 		if (split_positions.back() < mat.rows - 1) {
-			split_positions.push_back(mat.rows - 1);
+			if (split_positions.back() >= mat.rows - 5) {
+				split_positions.back() = mat.rows - 1;
+			}
+			else {
+				split_positions.push_back(mat.rows - 1);
+			}
 		}
 	}
 	else if (mat.rows == 1) {
 		if (split_positions.back() < mat.cols - 1) {
-			split_positions.push_back(mat.cols - 1);
+			if (split_positions.back() >= mat.cols - 5) {
+				split_positions.back() = mat.cols - 1;
+			}
+			else {
+				split_positions.push_back(mat.cols - 1);
+			}
 		}
 	}
 }
@@ -1301,6 +1240,75 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 	}
 }
 
+void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split) {
+	vector<vector<Tile>> tiles(y_split.size() - 1);
+
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		tiles[i].resize(x_split.size() - 1);
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			int width = x_split[j + 1] - x_split[j];
+			int height = y_split[i + 1] - y_split[i];
+			tiles[i][j] = Tile(x_split[j], y_split[i], width, height, cv::Mat(img, cv::Rect(x_split[j], y_split[i], width, height)));
+		}
+	}
+
+	vector<vector<pair<int, int>>> clusters;
+	vector<Tile> centroids;
+	for (int i = 0; i < tiles.size(); ++i) {
+		for (int j = 0; j < tiles[i].size(); ++j) {
+			float min_dist = numeric_limits<float>::max();
+			int min_id;
+			for (int k = 0; k < centroids.size(); ++k) {
+				cv::Mat img;
+				cv::resize(tiles[i][j].image, img, cv::Size(centroids[k].width, centroids[k].height));
+				float dist = cvutils::msd(centroids[k].image, img) + SQR(tiles[i][j].width - centroids[k].width) + SQR(tiles[i][j].height - centroids[k].height);
+				if (dist < min_dist) {
+					min_dist = dist;
+					min_id = k;
+				}
+			}
+
+			if (min_dist < 2000) {
+				clusters[min_id].push_back(make_pair(i, j));
+				int width_total = 0;
+				int height_total = 0;
+				for (int k = 0; k < clusters[min_id].size(); ++k) {
+					width_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].width;
+					height_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].height;
+				}
+				centroids[min_id].width = width_total / clusters[min_id].size();
+				centroids[min_id].height = height_total / clusters[min_id].size();
+				centroids[min_id].image = cv::Mat(centroids[min_id].height, centroids[min_id].width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
+				for (int k = 0; k < clusters[min_id].size(); ++k) {
+					cv::Mat img;
+					cv::resize(tiles[clusters[min_id][k].first][clusters[min_id][k].second].image, img, cv::Size(centroids[min_id].width, centroids[min_id].height));
+					img.convertTo(img, CV_32FC3);
+					centroids[min_id].image += img;
+				}
+				centroids[min_id].image /= clusters[min_id].size();
+				centroids[min_id].image.convertTo(centroids[min_id].image, CV_8UC3);
+			}
+			else {
+				centroids.push_back(Tile(tiles[i][j].x, tiles[i][j].y, tiles[i][j].width, tiles[i][j].height, tiles[i][j].image.clone()));
+				clusters.push_back(vector<pair<int, int>>());
+				clusters.back().push_back(make_pair(i, j));
+			}
+		}
+	}
+
+
+
+	cv::Mat result(img.rows - 1, img.cols - 1, CV_8UC3);
+	for (int i = 0; i < clusters.size(); ++i) {
+		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
+		for (int j = 0; j < clusters[i].size(); ++j) {
+			Tile& tile = tiles[clusters[i][j].first][clusters[i][j].second];
+			cv::rectangle(result, cv::Rect(tile.x, tile.y, tile.width, tile.height), color, -1);
+		}
+	}
+	cv::imwrite("facade_labeled.png", result);
+}
+
 void subdivideFacade(const cv::Mat& img) {
 	cv::Mat grayImg;
 	cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
@@ -1429,11 +1437,14 @@ void subdivideFacade(const cv::Mat& img) {
 	// 窓の位置をalignする
 	refine(y_split, x_split, window_rects);
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
+
+	// 各tileのsimilarityをチェックする
+	clusterTiles(img, y_split, x_split);
 }
 
 int main() {
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade4.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade2.png");
 
 	subdivideFacade(img);
 
