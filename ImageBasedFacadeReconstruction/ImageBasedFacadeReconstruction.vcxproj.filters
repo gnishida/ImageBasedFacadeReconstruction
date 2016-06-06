@@ -24,6 +24,12 @@
     <ClCompile Include="Utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CVUtilsTest.h">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CVUtilsTest.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h">

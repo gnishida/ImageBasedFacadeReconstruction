@@ -17,6 +17,7 @@
 #include "CVUtils.h"
 #include "Utils.h"
 #include <time.h>
+#include "CVUtilsTest.h"
 
 #ifndef SQR
 #define	SQR(x)	((x) * (x))
@@ -1443,6 +1444,8 @@ void subdivideFacade(const cv::Mat& img) {
 }
 
 int main() {
+	cvutils::test_msd();
+
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
 	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade2.png");
 

@@ -124,6 +124,8 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CVUtils.cpp" />
+    <ClCompile Include="CVUtilsTest.cpp" />
+    <ClCompile Include="CVUtilsTest.h" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Utils.cpp" />
   </ItemGroup>

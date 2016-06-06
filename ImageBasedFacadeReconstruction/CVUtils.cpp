@@ -137,21 +137,9 @@ namespace cvutils {
 			cv::Vec3f value = result.at<cv::Vec3f>(0, 0);
 			return (value[0] + value[1] + value[2]) / img1.rows / img1.cols;
 		}
-
-		/*
-		double result = 0.0f;
-
-		for (int r = 0; r < img1.rows; ++r) {
-			for (int c = 0; c < img1.cols; ++c) {
-				int c1 = img1.at<unsigned char>(r, c);
-				int c2 = img2.at<unsigned char>(r, c);
-				int diff = img1.at<unsigned char>(r, c) - img2.at<unsigned char>(r, c);
-				result += (double)(diff * diff) / img1.rows / img1.cols;
-			}
+		else {
+			return result.at<float>(0, 0) / img1.rows / img1.cols;
 		}
-
-		return result;
-		*/
 	}
 
 	bool isLocalMinimum(const cv::Mat& mat, int index, int num) {
