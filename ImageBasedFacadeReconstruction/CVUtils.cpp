@@ -14,13 +14,13 @@ namespace cvutils {
 	 * @param mat	Matrix
 	 * @return		Maximum element value
 	 */
-	float max(const cv::Mat& mat) {
-		cv::Mat result;
+	double max(const cv::Mat& mat) {
+		cv::Mat result = mat.clone();
+		result = result.reshape(1, result.cols * result.rows * result.channels());
+		cv::reduce(result, result, 0, CV_REDUCE_MAX);
+		result.convertTo(result, CV_64F);
 
-		cv::reduce(mat, result, 0, CV_REDUCE_MAX);
-		cv::reduce(result, result, 1, CV_REDUCE_MAX);
-
-		return result.at<float>(0, 0);
+		return result.at<double>(0, 0);
 	}
 
 	/**
@@ -29,13 +29,26 @@ namespace cvutils {
 	* @param mat	Matrix
 	* @return		Minimum element value
 	*/
-	float min(const cv::Mat& mat) {
-		cv::Mat result;
+	double min(const cv::Mat& mat) {
+		cv::Mat result = mat.clone();
+		result = result.reshape(1, result.cols * result.rows * result.channels());
+		cv::reduce(result, result, 0, CV_REDUCE_MIN);
+		result.convertTo(result, CV_64F);
+		
+		return result.at<double>(0, 0);
+	}
 
-		cv::reduce(mat, result, 0, CV_REDUCE_MIN);
-		cv::reduce(result, result, 1, CV_REDUCE_MIN);
+	vector<double> mean(const cv::Mat& mat) {
+		cv::Mat result = mat.clone();
+		result = result.reshape(1, result.cols * result.rows);
+		cv::reduce(result, result, 0, CV_REDUCE_AVG);
+		result.convertTo(result, CV_64F);
 
-		return result.at<float>(0, 0);
+		vector<double> ret(mat.channels());
+		for (int i = 0; i < ret.size(); ++i) {
+			ret[i] = result.at<double>(0, i);
+		}
+		return ret;
 	}
 
 	/**
@@ -52,15 +65,7 @@ namespace cvutils {
 			for (int c = 0; c < mat.cols; ++c) {
 				if (c > 0) out << "\t";
 
-				if (mat.type() == CV_8U) {
-					out << mat.at<unsigned int>(r, c);
-				}
-				else if (mat.type() == CV_32F) {
-					out << mat.at<float>(r, c);
-				}
-				else if (mat.type() == CV_64F) {
-					out << mat.at<double>(r, c);
-				}
+				out << get(mat, r, c);
 			}
 			out << endl;
 		}
@@ -118,27 +123,51 @@ namespace cvutils {
 	double msd(const cv::Mat& img1, const cv::Mat& img2) {
 		cv::Mat diff_mat;
 		cv::absdiff(img1, img2, diff_mat);
+		diff_mat = diff_mat.reshape(1, diff_mat.rows * diff_mat.cols * diff_mat.channels());
 
 		cv::Mat sqr_mat;
-		if (img1.channels() == 1) {
-			cv::multiply(diff_mat, diff_mat, sqr_mat, 1, CV_32F);
-		}
-		else if (img1.channels() == 3) {
-			cv::multiply(diff_mat, diff_mat, sqr_mat, 1, CV_32FC3);
-		}
+		cv::multiply(diff_mat, diff_mat, sqr_mat, 1, CV_64F);
 
-		cv::Mat result;
-		cv::reduce(sqr_mat, result, 0, CV_REDUCE_SUM);
-		cv::reduce(result, result, 1, CV_REDUCE_SUM);
-		if (result.channels() == 1) {
-			return result.at<float>(0, 0) / img1.rows / img1.cols;
+		cv::reduce(sqr_mat, sqr_mat, 0, CV_REDUCE_SUM);
+		return sqr_mat.at<double>(0, 0) / img1.rows / img1.cols;
+	}
+
+	double corr(const cv::Mat& img1, const cv::Mat& img2) {
+		cv::Mat a;
+		img1.convertTo(a, CV_64F);
+		cv::Mat b;
+		img2.convertTo(b, CV_64F);
+
+		cv::Mat m1, m2, m3;
+		cv::multiply(a, b, m1);
+		cv::multiply(a, a, m2);
+		cv::multiply(b, b, m3);
+
+		m1 = m1.reshape(1, m1.rows * m1.cols * m1.channels());
+		m2 = m2.reshape(1, m2.rows * m2.cols * m2.channels());
+		m3 = m3.reshape(1, m3.rows * m3.cols * m3.channels());
+		m1.convertTo(m1, CV_64F);
+		m2.convertTo(m2, CV_64F);
+		m3.convertTo(m3, CV_64F);
+		cv::reduce(m1, m1, 0, CV_REDUCE_SUM, CV_64F);
+		cv::reduce(m2, m2, 0, CV_REDUCE_SUM, CV_64F);
+		cv::reduce(m3, m3, 0, CV_REDUCE_SUM, CV_64F);
+
+		return m1.at<double>(0, 0) / sqrt(m2.at<double>(0, 0) * m3.at<double>(0, 0));
+	}
+
+	double get(const cv::Mat& mat, int r, int c) {
+		if (mat.type() == CV_8U) {
+			return mat.at<unsigned char>(r, c);
 		}
-		else if (result.channels() == 3) {
-			cv::Vec3f value = result.at<cv::Vec3f>(0, 0);
-			return (value[0] + value[1] + value[2]) / img1.rows / img1.cols;
+		else if (mat.type() == CV_32F) {
+			return mat.at<float>(r, c);
+		}
+		else if (mat.type() == CV_64F) {
+			return mat.at<double>(r, c);
 		}
 		else {
-			return result.at<float>(0, 0) / img1.rows / img1.cols;
+			return 0.0;
 		}
 	}
 
@@ -151,7 +180,7 @@ namespace cvutils {
 			}
 			else {
 				for (int c = index; c > std::max(0, index - num); --c) {
-					if (mat.at<float>(0, c) >= mat.at<float>(0, c - 1)) {
+					if (get(mat, 0, c) >= get(mat, 0, c - 1)) {
 						localMinimum = false;
 						break;
 					}
@@ -164,7 +193,7 @@ namespace cvutils {
 				}
 				else {
 					for (int c = index; c < std::min(mat.cols - 1, index + num); ++c) {
-						if (mat.at<float>(0, c) >= mat.at<float>(0, c + 1)) {
+						if (get(mat, 0, c) >= get(mat, 0, c + 1)) {
 							localMinimum = false;
 							break;
 						}
@@ -178,7 +207,7 @@ namespace cvutils {
 			}
 			else {
 				for (int r = index; r > std::max(0, index - num); --r) {
-					if (mat.at<float>(r, 0) >= mat.at<float>(r - 1, 0)) {
+					if (get(mat, r, 0) >= get(mat, r - 1, 0)) {
 						localMinimum = false;
 						break;
 					}
@@ -191,7 +220,7 @@ namespace cvutils {
 				}
 				else {
 					for (int r = index; r < std::min(mat.rows - 1, index + num); ++r) {
-						if (mat.at<float>(r, 0) >= mat.at<float>(r + 1, 0)) {
+						if (get(mat, r, 0) >= get(mat, r + 1, 0)) {
 							localMinimum = false;
 							break;
 						}
@@ -212,7 +241,7 @@ namespace cvutils {
 			}
 			else {
 				for (int c = index; c > std::max(0, index - num); --c) {
-					if (mat.at<float>(0, c) <= mat.at<float>(0, c - 1)) {
+					if (get(mat, 0, c) <= get(mat, 0, c - 1)) {
 						localMaximum = false;
 						break;
 					}
@@ -225,7 +254,7 @@ namespace cvutils {
 				}
 				else {
 					for (int c = index; c < std::min(mat.cols - 1, index + num); ++c) {
-						if (mat.at<float>(0, c) <= mat.at<float>(0, c + 1)) {
+						if (get(mat, 0, c) <= get(mat, 0, c + 1)) {
 							localMaximum = false;
 							break;
 						}
@@ -239,7 +268,7 @@ namespace cvutils {
 			}
 			else {
 				for (int r = index; r > std::max(0, index - num); --r) {
-					if (mat.at<float>(r, 0) <= mat.at<float>(r - 1, 0)) {
+					if (get(mat, r, 0) <= get(mat, r - 1, 0)) {
 						localMaximum = false;
 						break;
 					}
@@ -252,7 +281,7 @@ namespace cvutils {
 				}
 				else {
 					for (int r = index; r < std::min(mat.rows - 1, index + num); ++r) {
-						if (mat.at<float>(r, 0) <= mat.at<float>(r + 1, 0)) {
+						if (get(mat, r, 0) <= get(mat, r + 1, 0)) {
 							localMaximum = false;
 							break;
 						}
@@ -267,14 +296,14 @@ namespace cvutils {
 	/**
 	 * 極値となるインデックスのリストを返却する。
 	 *
-	 * @param mat		データ
-	 * @param smooth	スムースするか
-	 * @param sigma		スムースする際のsigma
+	 * @param mat				データ
+	 * @param smooth			スムースするか
+	 * @param sigma				スムースする際のsigma
 	 * @param flag
-	 * @param width		極値周辺で、チェックする幅
-	 * @return			極値となるインデックスのリスト
+	 * @param continuous_num	極値周辺で、チェックする幅
+	 * @return					極値となるインデックスのリスト
 	 */
-	vector<int> getPeak(const cv::Mat& mat, bool smooth, int sigma, int flag, int width) {
+	vector<int> getPeak(const cv::Mat& mat, bool smooth, int sigma, int flag, int continuous_num) {
 		vector<int> peaks;
 
 		// sigma has to be odd.
@@ -291,12 +320,12 @@ namespace cvutils {
 		if (mat.cols == 1) {
 			for (int r = 0; r < mat.rows; ++r) {
 				if (flag == LOCAL_MINIMUM) {
-					if (cvutils::isLocalMinimum(mat, r, width)) {
+					if (cvutils::isLocalMinimum(mat, r, continuous_num)) {
 						peaks.push_back(r);
 					}
 				}
 				else if (flag == LOCAL_MAXIMUM) {
-					if (cvutils::isLocalMaximum(mat, r, width)) {
+					if (cvutils::isLocalMaximum(mat, r, continuous_num)) {
 						peaks.push_back(r);
 					}
 
@@ -306,12 +335,12 @@ namespace cvutils {
 		else if (mat.rows == 1) {
 			for (int c = 0; c < mat.cols; ++c) {
 				if (flag == LOCAL_MINIMUM) {
-					if (cvutils::isLocalMinimum(mat, c, width)) {
+					if (cvutils::isLocalMinimum(mat, c, continuous_num)) {
 						peaks.push_back(c);
 					}
 				}
 				else if (flag == LOCAL_MAXIMUM) {
-					if (cvutils::isLocalMaximum(mat, c, width)) {
+					if (cvutils::isLocalMaximum(mat, c, continuous_num)) {
 						peaks.push_back(c);
 					}
 				}
@@ -329,10 +358,10 @@ namespace cvutils {
 
 		for (int r = 0; r < h_max.rows; ++r) {
 			for (int c = 0; c < h_max.cols; ++c) {
-				if (h_max.at<float>(r, c) < min_value) continue;
+				if (get(h_max, r, c) < min_value) continue;
 
 				for (int i = 0; i < histogram.size(); ++i) {
-					histogram[i] += utils::gause(h_max.at<float>(r, c) - i, sigma);
+					histogram[i] += utils::gause(get(h_max, r, c) - i, sigma);
 				}
 			}
 		}
@@ -353,14 +382,26 @@ namespace cvutils {
 	* Output an image with vertical graph.
 	*
 	* @param img		Image
-	* @param ver		Vertical graph (Nx1 float-element matrix)
+	* @param ver		Vertical graph (Nx1 matrix)
 	* @param filename	output file name
 	*/
-	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const string& filename) {
+	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const string& filename, int flag, int continuous_num, int lineWidth) {
 		int graphSize = std::max(100.0, std::max(img.rows, img.cols) * 0.3);
 		int margin = 10;
 
-		cv::Mat result(img.rows, img.cols + graphSize + margin + 3, img.type(), cv::Scalar(255, 255, 255));
+		cv::Mat result;
+		cv::Scalar graph_color;
+		cv::Scalar peak_color;
+		if (img.type() == CV_8U) {
+			graph_color = cv::Scalar(0);
+			peak_color = cv::Scalar(128);
+			result = cv::Mat(img.rows, img.cols + graphSize + margin + 3, img.type(), cv::Scalar(255));
+		}
+		else if (img.type() == CV_8UC3) {
+			graph_color = cv::Scalar(0, 0, 0);
+			peak_color = cv::Scalar(0, 0, 255);
+			result = cv::Mat(img.rows, img.cols + graphSize + margin + 3, img.type(), cv::Scalar(255, 255, 255));
+		}
 
 		// copy img to result
 		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
@@ -372,17 +413,21 @@ namespace cvutils {
 
 		// draw vertical graph
 		for (int r = 0; r < img.rows - 1; ++r) {
-			int x1 = img.cols + margin + (ver.at<float>(r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
-			int x2 = img.cols + margin + (ver.at<float>(r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x1 = img.cols + margin + (get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + margin + (get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
 
-			cv::Scalar color;
-			if (img.type() == CV_8U) {
-				color = cv::Scalar(0);
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
+
+			if (flag & LOCAL_MINIMUM) {
+				if (isLocalMinimum(ver, r, continuous_num)) {
+					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), peak_color, lineWidth);
+				}
 			}
-			else if (img.type() == CV_8UC3) {
-				color = cv::Scalar(0, 0, 0);
+			if (flag & LOCAL_MAXIMUM) {
+				if (isLocalMaximum(ver, r, continuous_num)) {
+					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), peak_color, lineWidth);
+				}
 			}
-			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), color, 1, cv::LINE_8);
 		}
 
 		cv::imwrite(filename, result);
@@ -391,15 +436,27 @@ namespace cvutils {
 	/**
 	* Output an image with horizontal graph.
 	*
-	* @param img		Image (3-channel color image)
-	* @param ver		Horizontal graph (1xN float-element matrix)
+	* @param img		Image
+	* @param ver		Horizontal graph (1xN matrix)
 	* @param filename	output file name
 	*/
-	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const string& filename) {
+	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const string& filename, int flag, int continuous_num, int lineWidth) {
 		int graphSize = std::max(100.0, std::max(img.rows, img.cols) * 0.3);
 		int margin = 10;
 
-		cv::Mat result(img.rows + graphSize + margin + 3, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+		cv::Mat result;
+		cv::Scalar graph_color;
+		cv::Scalar peak_color;
+		if (img.type() == CV_8U) {
+			graph_color = cv::Scalar(0);
+			peak_color = cv::Scalar(128);
+			result = cv::Mat(img.rows + graphSize + margin + 3, img.cols, img.type(), cv::Scalar(255));
+		}
+		else if (img.type() == CV_8UC3) {
+			graph_color = cv::Scalar(0, 0, 0);
+			peak_color = cv::Scalar(0, 0, 255);
+			result = cv::Mat(img.rows + graphSize + margin + 3, img.cols, img.type(), cv::Scalar(255, 255, 255));
+		}
 
 		// copy img to result
 		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
@@ -411,10 +468,21 @@ namespace cvutils {
 
 		// draw horizontal graph
 		for (int c = 0; c < img.cols - 1; ++c) {
-			int y1 = img.rows + margin + (hor.at<float>(0, c) - min_hor) / (max_hor - min_hor) * graphSize;
-			int y2 = img.rows + margin + (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y1 = img.rows + margin + (get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + margin + (get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
-			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
+
+			if (flag & LOCAL_MINIMUM) {
+				if (isLocalMinimum(hor, c, continuous_num)) {
+					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), peak_color, lineWidth);
+				}
+			}
+			if (flag & LOCAL_MAXIMUM) {
+				if (isLocalMaximum(hor, c, continuous_num)) {
+					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), peak_color, lineWidth);
+				}
+			}
 		}
 
 		cv::imwrite(filename, result);
@@ -423,12 +491,12 @@ namespace cvutils {
 	/**
 	 * Output an image with vertical and horizontal graphs.
 	 *
-	 * @param img		Image (3-channel color image)
-	 * @param ver		Vertical graph (Nx1 float-element matrix)
-	 * @param hor		Horizontal graph (1xN float-element matrix)
+	 * @param img		Image
+	 * @param ver		Vertical graph (Nx1 matrix)
+	 * @param hor		Horizontal graph (1xN matrix)
 	 * @param filename	output file name
 	 */
-	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename, int flag, int lineWidth) {
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename, int flag, int continuous_num, int lineWidth) {
 		int graphSize = std::max(10.0, std::max(img.rows, img.cols) * 0.3);
 
 		cv::Mat result;
@@ -458,13 +526,18 @@ namespace cvutils {
 		// draw vertical graph
 		cv::Mat blured_ver;
 		for (int r = 0; r < img.rows - 1; ++r) {
-			int x1 = img.cols + (ver.at<float>(r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
-			int x2 = img.cols + (ver.at<float>(r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x1 = img.cols + (get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + (get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
 
 			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
 
-			if (flag & LOCAL_MINIMUM && r > 0) {
-				if (isLocalMinimum(ver, r, 1)) {
+			if (flag & LOCAL_MINIMUM) {
+				if (isLocalMinimum(ver, r, continuous_num)) {
+					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), peak_color, lineWidth);
+				}
+			}
+			if (flag & LOCAL_MAXIMUM) {
+				if (isLocalMaximum(ver, r, continuous_num)) {
 					cv::line(result, cv::Point(0, r), cv::Point(img.cols - 1, r), peak_color, lineWidth);
 				}
 			}
@@ -473,13 +546,18 @@ namespace cvutils {
 		// draw horizontal graph
 		cv::Mat blured_hor;
 		for (int c = 0; c < img.cols - 1; ++c) {
-			int y1 = img.rows + (hor.at<float>(0, c) - min_hor) / (max_hor - min_hor) * graphSize;
-			int y2 = img.rows + (hor.at<float>(0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y1 = img.rows + (get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
 
-			if (flag & LOCAL_MINIMUM && c > 0) {
-				if (isLocalMinimum(hor, c, 1)) {
+			if (flag & LOCAL_MINIMUM) {
+				if (isLocalMinimum(hor, c, continuous_num)) {
+					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), peak_color, lineWidth);
+				}
+			}
+			if (flag & LOCAL_MAXIMUM) {
+				if (isLocalMaximum(hor, c, continuous_num)) {
 					cv::line(result, cv::Point(c, 0), cv::Point(c, img.rows - 1), peak_color, lineWidth);
 				}
 			}

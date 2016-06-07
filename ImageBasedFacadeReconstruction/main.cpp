@@ -1241,6 +1241,12 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 	}
 }
 
+float compute_dist(const Tile& t1, const Tile& t2) {
+	cv::Mat img;
+	cv::resize(t1.image, img, cv::Size(t2.width, t2.height));
+	return cvutils::msd(t2.image, img) + SQR(t1.width - t2.width) + SQR(t1.height - t2.height);
+}
+
 void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split) {
 	vector<vector<Tile>> tiles(y_split.size() - 1);
 
@@ -1260,9 +1266,7 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 			float min_dist = numeric_limits<float>::max();
 			int min_id;
 			for (int k = 0; k < centroids.size(); ++k) {
-				cv::Mat img;
-				cv::resize(tiles[i][j].image, img, cv::Size(centroids[k].width, centroids[k].height));
-				float dist = cvutils::msd(centroids[k].image, img) + SQR(tiles[i][j].width - centroids[k].width) + SQR(tiles[i][j].height - centroids[k].height);
+				float dist = compute_dist(tiles[i][j], centroids[k]);
 				if (dist < min_dist) {
 					min_dist = dist;
 					min_id = k;
@@ -1444,7 +1448,7 @@ void subdivideFacade(const cv::Mat& img) {
 }
 
 int main() {
-	cvutils::test_msd();
+	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
 	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade2.png");
