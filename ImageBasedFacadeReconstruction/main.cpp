@@ -1028,7 +1028,8 @@ void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
 			}
 		}
 	}
-	
+
+	// 両端処理
 	if (split_positions.size() == 0) {
 		split_positions.insert(split_positions.begin(), 0);
 	}
@@ -1060,6 +1061,40 @@ void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
 				split_positions.push_back(mat.cols - 1);
 			}
 		}
+	}
+}
+
+void refineSplitLines(vector<int>& split_positions) {
+	// 間隔が狭すぎる場合は、分割して隣接領域にマージする
+	while (true) {
+		// 領域の幅を計算する
+		cv::Mat intervals(split_positions.size() - 1, 1, CV_32F);
+		for (int i = 0; i < split_positions.size() - 1; ++i) {
+			intervals.at<float>(i, 0) = split_positions[i + 1] - split_positions[i];
+		}
+		float avg_interval = cvutils::getMostPopularValue(intervals, 3, 3);
+
+		bool updated = false;
+		for (int i = 0; i < split_positions.size() - 1;) {
+			if (split_positions[i + 1] - split_positions[i] < avg_interval * 0.5) {
+				if (i == 0) {
+					split_positions.erase(split_positions.begin() + 1);
+				}
+				else if (i == split_positions.size() - 2) {
+					split_positions.erase(split_positions.begin() + split_positions.size() - 2);
+				}
+				else {
+					split_positions[i] = (split_positions[i + 1] + split_positions[i]) * 0.5;
+					split_positions.erase(split_positions.begin() + i + 1);
+				}
+				updated = true;
+			}
+			else {
+				i++;
+			}
+		}
+
+		if (!updated) break;
 	}
 }
 
@@ -1384,9 +1419,11 @@ void subdivideFacade(const cv::Mat& img) {
 	vector<int> y_split;
 	//findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
 	getSplitLines(Ver, y_split);
+	refineSplitLines(y_split);
 	vector<int> x_split;
 	//findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
 	getSplitLines(Hor, x_split);
+	refineSplitLines(x_split);
 	time_t end = clock();
 	cout << "Time: " << (end - start) << "msec." << endl;
 	outputFacadeStructure(img, y_split, x_split, "facade_subdivision.png", 1);
