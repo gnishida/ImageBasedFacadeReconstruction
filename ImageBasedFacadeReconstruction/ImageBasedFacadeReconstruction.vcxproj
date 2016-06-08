@@ -126,12 +126,14 @@
     <ClCompile Include="CVUtils.cpp" />
     <ClCompile Include="CVUtilsTest.cpp" />
     <ClCompile Include="CVUtilsTest.h" />
+    <ClCompile Include="facade_segmentation.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="visualization.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h" />
+    <ClInclude Include="facade_segmentation.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="visualization.h" />
   </ItemGroup>

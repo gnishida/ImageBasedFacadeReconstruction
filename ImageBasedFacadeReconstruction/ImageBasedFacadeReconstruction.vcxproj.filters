@@ -33,6 +33,9 @@
     <ClCompile Include="CVUtilsTest.h">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="facade_segmentation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h">
@@ -42,6 +45,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="visualization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="facade_segmentation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
