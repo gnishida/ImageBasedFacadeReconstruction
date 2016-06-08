@@ -18,220 +18,14 @@
 #include "Utils.h"
 #include <time.h>
 #include "CVUtilsTest.h"
+#include "ibfr.h"
+#include "visualization.h"
 
 #ifndef SQR
 #define	SQR(x)	((x) * (x))
 #endif
 
 using namespace std;
-
-class Tile {
-public:
-	int x;
-	int y;
-	int width;
-	int height;
-	cv::Mat image;
-
-public:
-	Tile() : x(0), y(0), width(0), height(0) {}
-	Tile(int x, int y, int width, int height, const cv::Mat& image) : x(x), y(y), width(width), height(height), image(image) {}
-};
-
-
-/**
- * Facade画像と合わせて、S_max(y)とh_max(y)を画像として保存する。
- * 論文 Fig 5に相当する画像。
- *
- * @param img		Facade画像
- * @param S_max		S_max
- * @param h_max		h_max
- * @param filename	output file name
- */
-void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<int>& y_set, const string& filename, int lineWidth) {
-	float max_S = cvutils::max(S_max);
-	float min_S = cvutils::min(S_max);
-	float max_h = cvutils::max(h_max);
-	float min_h = cvutils::min(h_max);
-
-	int graphSize = img.rows * 0.25;
-	int margin = graphSize * 0.2;
-	cv::Mat result(img.rows, img.cols + graphSize + max_h + margin * 3, CV_8UC3, cv::Scalar(255, 255, 255));
-
-	// copy img to result
-	cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
-	img.copyTo(roi);
-
-	// draw S_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + margin + (S_max(r, 0) - min_S) / (max_S - min_S) * graphSize;
-		int x2 = img.cols + margin + (S_max(r + 1, 0) - min_S) / (max_S - min_S) * graphSize;
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw h_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + graphSize + margin * 2 + h_max(r, 0);
-		int x2 = img.cols + graphSize + margin * 2 + h_max(r + 1, 0);
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw the horizontal split lines
-	for (int i = 0; i < y_set.size(); ++i) {
-		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols - 1, y_set[i]), cv::Scalar(0, 0, 255), lineWidth);
-	}
-
-	cv::imwrite(filename, result);
-}
-
-void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const string& filename, int lineWidth) {
-	vector<int> y_set;
-	outputFacadeStructureV(img, S_max, h_max, y_set, filename, lineWidth);
-}
-
-void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<int>& x_set, const string& filename, int lineWidth) {
-	float max_S = cvutils::max(S_max);
-	float min_S = cvutils::min(S_max);
-	float max_w = cvutils::max(w_max);
-	float min_w = cvutils::min(w_max);
-
-	int graphSize = max(80.0, img.rows * 0.25);
-	int margin = graphSize * 0.2;
-	cv::Mat result(img.rows + graphSize + max_w + margin * 3, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
-
-	// copy img to result
-	cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
-	img.copyTo(roi);
-
-	// draw S_max
-	for (int c = 0; c < img.cols - 1; ++c) {
-		int y1 = img.rows + margin + (S_max(0, c) - min_S) / (max_S - min_S) * graphSize;
-		int y2 = img.rows + margin + (S_max(0, c + 1) - min_S) / (max_S - min_S) * graphSize;
-
-		cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw w_max
-	for (int c = 0; c < img.cols - 1; ++c) {
-		int y1 = img.rows + graphSize + margin * 2 + w_max(0, c);
-		int y2 = img.rows + graphSize + margin * 2 + w_max(0, c + 1);
-
-		cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw the vertical split lines
-	for (int i = 0; i < x_set.size(); ++i) {
-		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows - 1), cv::Scalar(0, 0, 255), lineWidth);
-	}
-
-	cv::imwrite(filename, result);
-}
-
-void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const string& filename, int lineWidth) {
-	vector<int> x_set;
-	outputFacadeStructureH(img, S_max, w_max, x_set, filename, lineWidth);
-}
-
-void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<int>& y_set, const vector<int>& x_set, const string& filename, int lineWidth) {
-	float max_SV = cvutils::max(SV_max);
-	float min_SV = cvutils::min(SV_max);
-	float max_h = cvutils::max(h_max);
-	float min_h = cvutils::min(h_max);
-	float max_SH = cvutils::max(SH_max);
-	float min_SH = cvutils::min(SH_max);
-	float max_w = cvutils::max(w_max);
-	float min_w = cvutils::min(w_max);
-
-	int graphSize = max(80.0, img.rows * 0.25);
-	int margin = graphSize * 0.2;
-	cv::Mat result(img.rows + graphSize + max_w + margin * 3, img.cols + graphSize + max_h + margin * 3, CV_8UC3, cv::Scalar(255, 255, 255));
-
-	// copy img to result
-	cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
-	img.copyTo(roi);
-
-	// draw SV_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + margin + (SV_max(r, 0) - min_SV) / (max_SV - min_SV) * graphSize;
-		int x2 = img.cols + margin + (SV_max(r + 1, 0) - min_SV) / (max_SV - min_SV) * graphSize;
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw h_max
-	for (int r = 0; r < img.rows - 1; ++r) {
-		int x1 = img.cols + graphSize + margin * 2 + h_max(r, 0);
-		int x2 = img.cols + graphSize + margin * 2 + h_max(r + 1, 0);
-
-		cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw SH_max
-	for (int c = 0; c < img.cols - 1; ++c) {
-		int y1 = img.rows + margin + (SH_max(0, c) - min_SH) / (max_SH - min_SH) * graphSize;
-		int y2 = img.rows + margin + (SH_max(0, c + 1) - min_SH) / (max_SH - min_SH) * graphSize;
-
-		cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw w_max
-	for (int c = 0; c < img.cols - 1; ++c) {
-		int y1 = img.rows + graphSize + margin * 2 + w_max(0, c);
-		int y2 = img.rows + graphSize + margin * 2 + w_max(0, c + 1);
-
-		cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
-	}
-
-	// draw the horizontal split lines
-	for (int i = 0; i < y_set.size(); ++i) {
-		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols - 1, y_set[i]), cv::Scalar(0, 0, 255), lineWidth);
-	}
-
-	// draw the vertical split lines
-	for (int i = 0; i < x_set.size(); ++i) {
-		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows - 1), cv::Scalar(0, 0, 255), lineWidth);
-	}
-
-	cv::imwrite(filename, result);
-}
-
-void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const string& filename, int lineWidth) {
-	vector<int> x_set;
-	vector<int> y_set;
-	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, filename, lineWidth);
-}
-
-void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename, int lineWidth) {
-	cv::Mat result = img.clone();
-
-	for (int i = 0; i < y_set.size(); ++i) {
-		cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), lineWidth);
-	}
-	for (int i = 0; i < x_set.size(); ++i) {
-		cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), lineWidth);
-	}
-	cv::imwrite(filename, result);
-}
-
-void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename) {
-	cv::Mat result = img.clone();
-	for (int i = 0; i < y_split.size(); ++i) {
-		cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
-	}
-	for (int i = 0; i < x_split.size(); ++i) {
-		cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], result.rows - 1), cv::Scalar(0, 0, 255), 1);
-	}
-	for (int i = 0; i < y_split.size() - 1; ++i) {
-		for (int j = 0; j < x_split.size() - 1; ++j) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
-				cv::rectangle(result, cv::Rect(x_split[j] + window_rects[i][j].x, y_split[i] + window_rects[i][j].y, window_rects[i][j].width, window_rects[i][j].height), cv::Scalar(255, 0, 0), 1);
-			}
-		}
-	}
-	cv::imwrite(filename, result);
-}
 
 /**
 * IFデータに基づいて画像を生成する。
@@ -1278,8 +1072,283 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 
 float compute_dist(const Tile& t1, const Tile& t2) {
 	cv::Mat img;
-	cv::resize(t1.image, img, cv::Size(t2.width, t2.height));
-	return cvutils::msd(t2.image, img) + SQR(t1.width - t2.width) + SQR(t1.height - t2.height);
+	cv::resize(t1.image, img, cv::Size(t2.image.cols, t2.image.rows));
+	return cvutils::msd(t2.image, img) + SQR(t1.image.cols - t2.image.cols) + SQR(t1.image.rows - t2.image.rows);
+}
+
+void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<Tile>& floors, vector<Tile>& centroids) {
+	floors.resize(y_split.size() - 1);
+	centroids.clear();
+
+	for (int i = y_split.size() - 2; i >= 0; --i) {
+		int height = y_split[i + 1] - y_split[i];
+		floors[i] = Tile(cv::Mat(img, cv::Rect(0, y_split[i], img.cols, height)));
+	}
+
+	vector<vector<int>> clusters;
+	for (int i = 0; i < floors.size(); ++i) {
+		float min_dist = numeric_limits<float>::max();
+		int min_id;
+		for (int k = 0; k < centroids.size(); ++k) {
+			float dist = compute_dist(floors[i], centroids[k]);
+			if (dist < min_dist) {
+				min_dist = dist;
+				min_id = k;
+			}
+		}
+
+		if (min_dist < 2000) {
+			floors[i].cluster_id = min_id;
+			clusters[min_id].push_back(i);
+			int width_total = 0;
+			int height_total = 0;
+			for (int k = 0; k < clusters[min_id].size(); ++k) {
+				width_total += floors[clusters[min_id][k]].image.cols;
+				height_total += floors[clusters[min_id][k]].image.rows;
+			}
+			int width = width_total / clusters[min_id].size();
+			int height = height_total / clusters[min_id].size();
+			centroids[min_id].image = cv::Mat(height, width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
+			for (int k = 0; k < clusters[min_id].size(); ++k) {
+				cv::Mat img;
+				cv::resize(floors[clusters[min_id][k]].image, img, cv::Size(centroids[min_id].image.cols, centroids[min_id].image.rows));
+				img.convertTo(img, CV_32FC3);
+				centroids[min_id].image += img;
+			}
+			centroids[min_id].image /= clusters[min_id].size();
+			centroids[min_id].image.convertTo(centroids[min_id].image, CV_8UC3);
+		}
+		else {
+			centroids.push_back(Tile(floors[i].image.clone()));
+			clusters.push_back(vector<int>());
+			clusters.back().push_back(i);
+			floors[i].cluster_id = centroids.size() - 1;
+		}
+	}
+
+	cout << "Facade segmentation:" << endl;
+	for (int i = 0; i < floors.size(); ++i) {
+		cout << "class: " << floors[i].cluster_id << endl;
+	}
+}
+
+void augumentTiles(const vector<Tile>& centroids, const vector<Tile>& tiles, vector<Tile>& augumented_tiles, int N) {
+	vector<pair<int, int>> repetition;
+	for (int i = 0; i < tiles.size();) {
+		repetition.push_back(make_pair(tiles[i].cluster_id, 1));
+		int next = i + 1;
+		for (; next < tiles.size(); ++next) {
+			if (tiles[i].cluster_id == tiles[next].cluster_id) {
+				repetition.back().second++;
+			}
+			else {
+				break;
+			}
+		}
+
+		i = next;
+	}
+
+	if (tiles.size() != N) {
+		int total_repetition = 0;
+		for (int i = 0; i < repetition.size(); ++i) {
+			if (repetition[i].second > 1) {
+				total_repetition += repetition[i].second;
+			}
+		}
+
+		int total_floors = 0;
+		float ratio = (float)(N - tiles.size()) / total_repetition;
+		for (int i = 0; i < repetition.size(); ++i) {
+			if (repetition[i].second > 1) {
+				repetition[i].second += repetition[i].second * ratio;
+			}
+
+			total_floors += repetition[i].second;
+		}
+
+		if (total_floors != N) {
+			for (int i = 0; i < repetition.size(); ++i) {
+				if (repetition[i].second > 1) {
+					repetition[i].second += N - total_floors;
+					break;
+				}
+			}
+		}
+	}
+
+	augumented_tiles.resize(N);
+	int index = 0;
+	for (int i = 0; i < repetition.size(); ++i) {
+		for (int j = 0; j < repetition[i].second; ++j) {
+			augumented_tiles[index] = Tile(centroids[repetition[i].first].image);
+			augumented_tiles[index].cluster_id = repetition[i].first;
+			index++;
+		}
+	}
+}
+
+float compute_similarity(const vector<Tile>& tiles, const vector<int> terminals) {
+	vector<int> labels;
+	for (int i = 0; i < tiles.size(); ++i) {
+		labels.push_back(tiles[i].cluster_id);
+	}
+
+	utils::findBestAssignment(terminals, labels);
+
+	float sim = 0.0f;
+	for (int i = 0; i < labels.size(); ++i) {
+		if (labels[i] == terminals[i]) sim++;
+	}
+
+	return sim;
+}
+
+void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) {
+	int N = 10;
+
+	vector<Tile> augumented_floors;
+	augumentTiles(centroids, floors, augumented_floors, N);
+
+	cout << "Facade segmentation augmented:" << endl;
+	for (int i = 0; i < augumented_floors.size(); ++i) {
+		cout << "class: " << augumented_floors[i].cluster_id << endl;
+	}
+
+	vector<int> grammar_terminals(N);
+
+	// facade grammar #1
+	for (int i = 0; i < N; ++i) {
+		grammar_terminals[i] = 0;
+	}
+	float min_sim = compute_similarity(augumented_floors, grammar_terminals);
+	int min_id = 0;
+
+	// facade grammar #2
+	for (int i = 0; i < N; ++i) {
+		if (i < N - 1) {
+			grammar_terminals[i] = 0;
+		}
+		else {
+			grammar_terminals[i] = 1;
+		}
+	}
+	float sim = compute_similarity(augumented_floors, grammar_terminals);
+	if (sim > min_sim) {
+		min_sim = sim;
+		min_id = 1;
+	}
+
+	// facade grammar #3
+	for (int i = 0; i < N; ++i) {
+		if (i == 0) {
+			grammar_terminals[i] = 0;
+		}
+		else {
+			grammar_terminals[i] = 1;
+		}
+	}
+	sim = compute_similarity(augumented_floors, grammar_terminals);
+	if (sim > min_sim) {
+		min_sim = sim;
+		min_id = 2;
+	}
+	
+	// facade grammar #4
+	for (int i = 0; i < N; ++i) {
+		if (i == 0) {
+			grammar_terminals[i] = 0;
+		}
+		else if (i < N - 1) {
+			grammar_terminals[i] = 1;
+		}
+		else {
+			grammar_terminals[i] = 2;
+		}
+	}
+	sim = compute_similarity(augumented_floors, grammar_terminals);
+	if (sim > min_sim) {
+		min_sim = sim;
+		min_id = 3;
+	}
+
+	// facade grammar #5
+	for (int i = 0; i < N; ++i) {
+		if (i == 0) {
+			grammar_terminals[i] = 0;
+		}
+		else if (i == 1) {
+			grammar_terminals[i] = 1;
+		}
+		else if (i < N - 1) {
+			grammar_terminals[i] = 2;
+		}
+		else {
+			grammar_terminals[i] = 3;
+		}
+	}
+	sim = compute_similarity(augumented_floors, grammar_terminals);
+	if (sim > min_sim) {
+		min_sim = sim;
+		min_id = 4;
+	}
+
+	cout << "Best grammar: " << min_id << endl;
+
+	if (min_id == 0) {
+		for (int i = 0; i < floors.size(); ++i) {
+			floors[i].cluster_id = 0;
+		}
+	}
+	else if (min_id == 1) {
+		for (int i = 0; i < floors.size(); ++i) {
+			if (i < floors.size() - 1) {
+				floors[i].cluster_id = 0;
+			}
+			else {
+				floors[i].cluster_id = 1;
+			}
+		}
+	}
+	else if (min_id == 2) {
+		for (int i = 0; i < floors.size(); ++i) {
+			if (i == 0) {
+				floors[i].cluster_id = 0;
+			}
+			else {
+				floors[i].cluster_id = 1;
+			}
+		}
+	}
+	else if (min_id == 3) {
+		for (int i = 0; i < floors.size(); ++i) {
+			if (i == 0) {
+				floors[i].cluster_id = 0;
+			}
+			else if (i < floors.size() - 1) {
+				floors[i].cluster_id = 1;
+			}
+			else {
+				floors[i].cluster_id = 2;
+			}
+		}
+	}
+	else if (min_id == 4) {
+		for (int i = 0; i < floors.size(); ++i) {
+			if (i == 0) {
+				floors[i].cluster_id = 0;
+			}
+			else if (i == 1) {
+				floors[i].cluster_id = 1;
+			}
+			else if (i < floors.size() - 1) {
+				floors[i].cluster_id = 2;
+			}
+			else {
+				floors[i].cluster_id = 3;
+			}
+		}
+	}
 }
 
 void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split) {
@@ -1290,7 +1359,7 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 		for (int j = 0; j < x_split.size() - 1; ++j) {
 			int width = x_split[j + 1] - x_split[j];
 			int height = y_split[i + 1] - y_split[i];
-			tiles[i][j] = Tile(x_split[j], y_split[i], width, height, cv::Mat(img, cv::Rect(x_split[j], y_split[i], width, height)));
+			tiles[i][j] = Tile(cv::Mat(img, cv::Rect(x_split[j], y_split[i], width, height)));
 		}
 	}
 
@@ -1313,15 +1382,15 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 				int width_total = 0;
 				int height_total = 0;
 				for (int k = 0; k < clusters[min_id].size(); ++k) {
-					width_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].width;
-					height_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].height;
+					width_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].image.cols;
+					height_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].image.rows;
 				}
-				centroids[min_id].width = width_total / clusters[min_id].size();
-				centroids[min_id].height = height_total / clusters[min_id].size();
-				centroids[min_id].image = cv::Mat(centroids[min_id].height, centroids[min_id].width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
+				//centroids[min_id].width = width_total / clusters[min_id].size();
+				//centroids[min_id].height = height_total / clusters[min_id].size();
+				centroids[min_id].image = cv::Mat(centroids[min_id].image.rows, centroids[min_id].image.cols, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
 				for (int k = 0; k < clusters[min_id].size(); ++k) {
 					cv::Mat img;
-					cv::resize(tiles[clusters[min_id][k].first][clusters[min_id][k].second].image, img, cv::Size(centroids[min_id].width, centroids[min_id].height));
+					cv::resize(tiles[clusters[min_id][k].first][clusters[min_id][k].second].image, img, cv::Size(centroids[min_id].image.cols, centroids[min_id].image.rows));
 					img.convertTo(img, CV_32FC3);
 					centroids[min_id].image += img;
 				}
@@ -1329,24 +1398,12 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 				centroids[min_id].image.convertTo(centroids[min_id].image, CV_8UC3);
 			}
 			else {
-				centroids.push_back(Tile(tiles[i][j].x, tiles[i][j].y, tiles[i][j].width, tiles[i][j].height, tiles[i][j].image.clone()));
+				centroids.push_back(Tile(tiles[i][j].image.clone()));
 				clusters.push_back(vector<pair<int, int>>());
 				clusters.back().push_back(make_pair(i, j));
 			}
 		}
 	}
-
-
-
-	cv::Mat result(img.rows - 1, img.cols - 1, CV_8UC3);
-	for (int i = 0; i < clusters.size(); ++i) {
-		cv::Scalar color(rand() % 256, rand() % 256, rand() % 256);
-		for (int j = 0; j < clusters[i].size(); ++j) {
-			Tile& tile = tiles[clusters[i][j].first][clusters[i][j].second];
-			cv::rectangle(result, cv::Rect(tile.x, tile.y, tile.width, tile.height), color, -1);
-		}
-	}
-	cv::imwrite("facade_labeled.png", result);
 }
 
 void subdivideFacade(const cv::Mat& img) {
@@ -1480,7 +1537,17 @@ void subdivideFacade(const cv::Mat& img) {
 	refine(y_split, x_split, window_rects);
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
 
-	// 各tileのsimilarityをチェックする
+	// 各floorのsimilarityを計算する
+	vector<Tile> floors;
+	vector<Tile> centroids;
+	clusterFloors(img, y_split, floors, centroids);
+	outputFacadeSegmentation(img, y_split, floors, "facade_labeled.png");
+
+	// 最も類似するfacade grammarを探す
+	findBestFacadeGrammar(centroids, floors);
+	outputFacadeSegmentation(img, y_split, floors, "facade_labeled_refined.png");
+
+	// 各tileのsimilarityを計算する
 	clusterTiles(img, y_split, x_split);
 }
 
@@ -1488,7 +1555,7 @@ int main() {
 	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade2.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
 
 	subdivideFacade(img);
 

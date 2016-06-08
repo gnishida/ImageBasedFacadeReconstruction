@@ -128,10 +128,13 @@
     <ClCompile Include="CVUtilsTest.h" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Utils.cpp" />
+    <ClCompile Include="visualization.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h" />
+    <ClInclude Include="ibfr.h" />
     <ClInclude Include="Utils.h" />
+    <ClInclude Include="visualization.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
