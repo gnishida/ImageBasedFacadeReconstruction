@@ -1076,7 +1076,7 @@ void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<cv::Ma
 		floors[i] = cv::Mat(img, cv::Rect(0, y_split[y_split.size() - i - 2], img.cols, height));
 	}
 
-	cvutils::clusterImages(floors, labels, centroids);
+	cvutils::clusterImages(floors, labels, centroids, 4);
 
 	cout << "Facade segmentation:" << endl;
 	for (int i = 0; i < labels.size(); ++i) {
@@ -1288,7 +1288,7 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 	}
 
 	vector<int> lin_labels;
-	cvutils::clusterImages(lin_tiles, lin_labels, centroids);
+	cvutils::clusterImages(lin_tiles, lin_labels, centroids, 4);
 
 	tiles.resize(y_split.size() - 1);
 	labels.resize(y_split.size() - 1);
@@ -1455,7 +1455,7 @@ int main() {
 	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade7.png");
 
 	subdivideFacade(img);
 

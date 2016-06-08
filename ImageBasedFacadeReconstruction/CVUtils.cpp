@@ -576,50 +576,57 @@ namespace cvutils {
 		return cvutils::msd(img2, img) + SQR(img1.cols - img2.cols) + SQR(img1.rows - img2.rows);
 	}
 
-	void clusterImages(const vector<cv::Mat>& images, vector<int>& labels, vector<cv::Mat>& centers) {
-		centers.clear();
-		labels.resize(images.size());
-		vector<vector<int>> clusters;
+	void clusterImages(const vector<cv::Mat>& images, vector<int>& labels, vector<cv::Mat>& centers, int max_centers) {
+		float threshold = 2000.0f;
 
-		for (int i = 0; i < images.size(); ++i) {
-			float min_dist = numeric_limits<float>::max();
-			int min_id;
-			for (int k = 0; k < centers.size(); ++k) {
-				float dist = computeImageDist(images[i], centers[k]);
-				if (dist < min_dist) {
-					min_dist = dist;
-					min_id = k;
+		while (true) {
+			centers.clear();
+			labels.resize(images.size());
+			vector<vector<int>> clusters;
+
+			for (int i = 0; i < images.size(); ++i) {
+				float min_dist = numeric_limits<float>::max();
+				int min_id;
+				for (int k = 0; k < centers.size(); ++k) {
+					float dist = computeImageDist(images[i], centers[k]);
+					if (dist < min_dist) {
+						min_dist = dist;
+						min_id = k;
+					}
+				}
+
+				if (min_dist < threshold) {
+					labels[i] = min_id;
+					clusters[min_id].push_back(i);
+					int width_total = 0;
+					int height_total = 0;
+					for (int k = 0; k < clusters[min_id].size(); ++k) {
+						width_total += images[clusters[min_id][k]].cols;
+						height_total += images[clusters[min_id][k]].rows;
+					}
+					int width = width_total / clusters[min_id].size();
+					int height = height_total / clusters[min_id].size();
+					centers[min_id] = cv::Mat(height, width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
+					for (int k = 0; k < clusters[min_id].size(); ++k) {
+						cv::Mat img;
+						cv::resize(images[clusters[min_id][k]], img, cv::Size(centers[min_id].cols, centers[min_id].rows));
+						img.convertTo(img, CV_32FC3);
+						centers[min_id] += img;
+					}
+					centers[min_id] /= clusters[min_id].size();
+					centers[min_id].convertTo(centers[min_id], CV_8UC3);
+				}
+				else {
+					centers.push_back(images[i].clone());
+					clusters.push_back(vector<int>());
+					clusters.back().push_back(i);
+					labels[i] = centers.size() - 1;
 				}
 			}
 
-			if (min_dist < 2000) {
-				labels[i] = min_id;
-				clusters[min_id].push_back(i);
-				int width_total = 0;
-				int height_total = 0;
-				for (int k = 0; k < clusters[min_id].size(); ++k) {
-					width_total += images[clusters[min_id][k]].cols;
-					height_total += images[clusters[min_id][k]].rows;
-				}
-				int width = width_total / clusters[min_id].size();
-				int height = height_total / clusters[min_id].size();
-				centers[min_id] = cv::Mat(height, width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
-				for (int k = 0; k < clusters[min_id].size(); ++k) {
-					cv::Mat img;
-					cv::resize(images[clusters[min_id][k]], img, cv::Size(centers[min_id].cols, centers[min_id].rows));
-					img.convertTo(img, CV_32FC3);
-					centers[min_id] += img;
-				}
-				centers[min_id] /= clusters[min_id].size();
-				centers[min_id].convertTo(centers[min_id], CV_8UC3);
-			}
-			else {
-				centers.push_back(images[i].clone());
-				clusters.push_back(vector<int>());
-				clusters.back().push_back(i);
-				labels[i] = centers.size() - 1;
-			}
+			if (centers.size() <= max_centers) break;
+
+			threshold *= 1.2;
 		}
-
 	}
 }
