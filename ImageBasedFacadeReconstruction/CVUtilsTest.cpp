@@ -103,7 +103,9 @@ namespace cvutils {
 		}
 
 		cv::Mat A2 = (cv::Mat_<unsigned char>(3, 3) << 1, 1, 2, 2, 2, 3, 4, 1, 0);
-		assert(abs(corr(A1, A2) * 12.0 - 11.0) < 0.001);
+		if (abs(corr(A1, A2) * 12.0 - 11.0) < 0.001) {
+			cerr << "test_corr() failed." << endl;
+		}
 
 		cout << "test_corr() done." << endl;
 	}

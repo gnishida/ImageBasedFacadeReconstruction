@@ -1071,9 +1071,9 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 
 void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
 	floors.resize(y_split.size() - 1);
-	for (int i = y_split.size() - 2; i >= 0; --i) {
-		int height = y_split[i + 1] - y_split[i];
-		floors[i] =cv::Mat(img, cv::Rect(0, y_split[i], img.cols, height));
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		int height = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+		floors[i] = cv::Mat(img, cv::Rect(0, y_split[y_split.size() - i - 2], img.cols, height));
 	}
 
 	cvutils::clusterImages(floors, labels, centroids);
@@ -1110,7 +1110,7 @@ void augumentTiles(const vector<int>& labels, vector<int>& augumented_tiles, int
 		}
 
 		int total_floors = 0;
-		float ratio = (float)(N - labels.size()) / total_repetition;
+		float ratio = (float)(N - (int)labels.size()) / (float)total_repetition;
 		for (int i = 0; i < repetition.size(); ++i) {
 			if (repetition[i].second > 1) {
 				repetition[i].second += repetition[i].second * ratio;
@@ -1151,7 +1151,7 @@ float compute_similarity(const vector<int>& labels, const vector<int> terminals)
 }
 
 void findBestFacadeGrammar(vector<int>& labels) {
-	int N = 10;
+	int N = 20;
 
 	vector<int> augumented_labels;
 	augumentTiles(labels, augumented_labels, N);
@@ -1455,7 +1455,7 @@ int main() {
 	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade3.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
 
 	subdivideFacade(img);
 
