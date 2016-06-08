@@ -14,3 +14,4 @@ void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const v
 void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename);
 
 void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& labels, const string& filename);
+void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<int>>& labels, const string& filename);

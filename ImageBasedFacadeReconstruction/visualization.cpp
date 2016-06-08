@@ -209,6 +209,7 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 		label_set[labels[i]] = true;
 	}
 
+	// 原色パレットの作成
 	vector<cv::Scalar> predefined_colors(7);
 	predefined_colors[0] = cv::Scalar(255, 0, 0);
 	predefined_colors[1] = cv::Scalar(0, 0, 255);
@@ -218,6 +219,7 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	predefined_colors[5] = cv::Scalar(255, 255, 0);
 	predefined_colors[6] = cv::Scalar(128, 128, 128);
 
+	// カラーパレットの作成
 	map<int, cv::Scalar> colors;
 	if (label_set.size() <= 7) {
 		int count = 0;
@@ -232,9 +234,59 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	}
 
 	cv::Mat result(img.rows, img.cols, CV_8UC3);
-	for (int i = 0; i < y_split.size() - 1; ++i) {
-		cv::rectangle(result, cv::Rect(0, y_split[i], img.cols, y_split[i + 1] - y_split[i]), colors[labels[labels.size() - i - 1]], -1);
+	for (int i = 0; i < labels.size(); ++i) {
+		int y = y_split[y_split.size() - i - 2];
+		int h = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+		cv::rectangle(result, cv::Rect(0, y, img.cols, h), colors[labels[i]], -1);
 	}
 	
+	cv::imwrite(filename.c_str(), result);
+}
+
+void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<int>>& labels, const string& filename) {
+	map<int, bool> label_set;
+	for (int i = 0; i < labels.size(); ++i) {
+		for (int j = 0; j < labels[i].size(); ++j) {
+			label_set[labels[i][j]] = true;
+		}
+	}
+
+	// 原色パレットの作成
+	vector<cv::Scalar> predefined_colors(7);
+	predefined_colors[0] = cv::Scalar(255, 0, 0);
+	predefined_colors[1] = cv::Scalar(0, 0, 255);
+	predefined_colors[2] = cv::Scalar(0, 255, 0);
+	predefined_colors[3] = cv::Scalar(255, 0, 255);
+	predefined_colors[4] = cv::Scalar(0, 255, 255);
+	predefined_colors[5] = cv::Scalar(255, 255, 0);
+	predefined_colors[6] = cv::Scalar(128, 128, 128);
+
+	// カラーパレットの作成
+	map<int, cv::Scalar> colors;
+	if (label_set.size() <= 7) {
+		int count = 0;
+		for (auto it = label_set.begin(); it != label_set.end(); ++it, ++count) {
+			colors[it->first] = predefined_colors[count];
+		}
+	}
+	else {
+		for (auto it = label_set.begin(); it != label_set.end(); ++it) {
+			colors[it->first] = cv::Scalar(rand() % 256, rand() % 256, rand() % 256);
+		}
+	}
+
+	cv::Mat result(img.rows, img.cols, CV_8UC3);
+	for (int i = 0; i < labels.size(); ++i) {
+		int y = y_split[y_split.size() - i - 2];
+		int h = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+
+		for (int j = 0; j < labels[i].size(); ++j) {
+			int x = x_split[j];
+			int w = x_split[j + 1] - x_split[j];
+
+			cv::rectangle(result, cv::Rect(x, y, w, h), colors[labels[i][j]], -1);
+		}
+	}
+
 	cv::imwrite(filename.c_str(), result);
 }

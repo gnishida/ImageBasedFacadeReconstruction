@@ -1069,14 +1069,14 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 	}
 }
 
-void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
+void clusterFloors(const cv::Mat& img, const vector<int>& y_split, int max_cluster, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
 	floors.resize(y_split.size() - 1);
 	for (int i = 0; i < y_split.size() - 1; ++i) {
 		int height = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
 		floors[i] = cv::Mat(img, cv::Rect(0, y_split[y_split.size() - i - 2], img.cols, height));
 	}
 
-	cvutils::clusterImages(floors, labels, centroids, 4);
+	cvutils::clusterImages(floors, labels, centroids, max_cluster);
 
 	cout << "Facade segmentation:" << endl;
 	for (int i = 0; i < labels.size(); ++i) {
@@ -1276,7 +1276,7 @@ void findBestFacadeGrammar(vector<int>& labels) {
 	}
 }
 
-void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, vector<vector<cv::Mat>>& tiles, vector<vector<int>>& labels, vector<cv::Mat>& centroids) {
+void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, int max_cluster, vector<vector<cv::Mat>>& tiles, vector<vector<int>>& labels, vector<cv::Mat>& centroids) {
 	vector<cv::Mat> lin_tiles((y_split.size() - 1) * (x_split.size() - 1));
 	for (int i = 0; i < y_split.size() - 1; ++i) {
 		int y = y_split[y_split.size() - i - 2];
@@ -1288,7 +1288,7 @@ void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<i
 	}
 
 	vector<int> lin_labels;
-	cvutils::clusterImages(lin_tiles, lin_labels, centroids, 4);
+	cvutils::clusterImages(lin_tiles, lin_labels, centroids, max_cluster);
 
 	tiles.resize(y_split.size() - 1);
 	labels.resize(y_split.size() - 1);
@@ -1438,7 +1438,7 @@ void subdivideFacade(const cv::Mat& img) {
 	vector<cv::Mat> floors;
 	vector<cv::Mat> centroids;
 	vector<int> floor_labels;
-	clusterFloors(img, y_split, floors, floor_labels, centroids);
+	clusterFloors(img, y_split, 4, floors, floor_labels, centroids);
 	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled.png");
 
 	// 最も類似するfacade grammarを探す
@@ -1448,7 +1448,8 @@ void subdivideFacade(const cv::Mat& img) {
 	// 各tileのsimilarityを計算する
 	vector<vector<cv::Mat>> tiles;
 	vector<vector<int>> tile_labels;
-	clusterTiles(img, y_split, x_split, tiles, tile_labels, centroids);
+	clusterTiles(img, y_split, x_split, 40, tiles, tile_labels, centroids);
+	outputFloorSegmentation(img, y_split, x_split, tile_labels, "floor_labeled.png");
 }
 
 int main() {
