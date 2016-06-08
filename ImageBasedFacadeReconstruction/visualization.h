@@ -14,4 +14,4 @@ void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, co
 void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename, int lineWidth);
 void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename);
 
-void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<Tile>& floors, const string& filename);
+void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& labels, const string& filename);

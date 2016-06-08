@@ -195,10 +195,18 @@ void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, cons
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<Tile>& floors, const string& filename) {
-	map<int, bool> labels;
-	for (int i = 0; i < floors.size(); ++i) {
-		labels[floors[i].cluster_id] = true;
+/**
+ * Facadeのフロアをクラスタリング結果に基づいて塗り分けする。
+ *
+ * @param img		Facade画像
+ * @param y_split	フロアの境界 (y座標(画像の上端がy=0)が昇順に格納されている)
+ * @param floors	クラスタリング結果 (1Fから順番に格納されている)
+ * @param filename	ファイル名
+ */
+void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& labels, const string& filename) {
+	map<int, bool> label_set;
+	for (int i = 0; i < labels.size(); ++i) {
+		label_set[labels[i]] = true;
 	}
 
 	vector<cv::Scalar> predefined_colors(7);
@@ -211,21 +219,21 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	predefined_colors[6] = cv::Scalar(128, 128, 128);
 
 	map<int, cv::Scalar> colors;
-	if (labels.size() <= 7) {
+	if (label_set.size() <= 7) {
 		int count = 0;
-		for (auto it = labels.begin(); it != labels.end(); ++it, ++count) {
+		for (auto it = label_set.begin(); it != label_set.end(); ++it, ++count) {
 			colors[it->first] = predefined_colors[count];
 		}
 	}
 	else {
-		for (auto it = labels.begin(); it != labels.end(); ++it) {
+		for (auto it = label_set.begin(); it != label_set.end(); ++it) {
 			colors[it->first] = cv::Scalar(rand() % 256, rand() % 256, rand() % 256);
 		}
 	}
 
 	cv::Mat result(img.rows, img.cols, CV_8UC3);
 	for (int i = 0; i < y_split.size() - 1; ++i) {
-		cv::rectangle(result, cv::Rect(0, y_split[i], img.cols, y_split[i + 1] - y_split[i]), colors[floors[i].cluster_id], -1);
+		cv::rectangle(result, cv::Rect(0, y_split[i], img.cols, y_split[i + 1] - y_split[i]), colors[labels[labels.size() - i - 1]], -1);
 	}
 	
 	cv::imwrite(filename.c_str(), result);

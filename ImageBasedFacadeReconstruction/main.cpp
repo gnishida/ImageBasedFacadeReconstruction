@@ -1070,75 +1070,28 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 	}
 }
 
-float compute_dist(const Tile& t1, const Tile& t2) {
-	cv::Mat img;
-	cv::resize(t1.image, img, cv::Size(t2.image.cols, t2.image.rows));
-	return cvutils::msd(t2.image, img) + SQR(t1.image.cols - t2.image.cols) + SQR(t1.image.rows - t2.image.rows);
-}
-
-void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<Tile>& floors, vector<Tile>& centroids) {
+void clusterFloors(const cv::Mat& img, const vector<int>& y_split, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
 	floors.resize(y_split.size() - 1);
-	centroids.clear();
-
 	for (int i = y_split.size() - 2; i >= 0; --i) {
 		int height = y_split[i + 1] - y_split[i];
-		floors[i] = Tile(cv::Mat(img, cv::Rect(0, y_split[i], img.cols, height)));
+		floors[i] =cv::Mat(img, cv::Rect(0, y_split[i], img.cols, height));
 	}
 
-	vector<vector<int>> clusters;
-	for (int i = 0; i < floors.size(); ++i) {
-		float min_dist = numeric_limits<float>::max();
-		int min_id;
-		for (int k = 0; k < centroids.size(); ++k) {
-			float dist = compute_dist(floors[i], centroids[k]);
-			if (dist < min_dist) {
-				min_dist = dist;
-				min_id = k;
-			}
-		}
-
-		if (min_dist < 2000) {
-			floors[i].cluster_id = min_id;
-			clusters[min_id].push_back(i);
-			int width_total = 0;
-			int height_total = 0;
-			for (int k = 0; k < clusters[min_id].size(); ++k) {
-				width_total += floors[clusters[min_id][k]].image.cols;
-				height_total += floors[clusters[min_id][k]].image.rows;
-			}
-			int width = width_total / clusters[min_id].size();
-			int height = height_total / clusters[min_id].size();
-			centroids[min_id].image = cv::Mat(height, width, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
-			for (int k = 0; k < clusters[min_id].size(); ++k) {
-				cv::Mat img;
-				cv::resize(floors[clusters[min_id][k]].image, img, cv::Size(centroids[min_id].image.cols, centroids[min_id].image.rows));
-				img.convertTo(img, CV_32FC3);
-				centroids[min_id].image += img;
-			}
-			centroids[min_id].image /= clusters[min_id].size();
-			centroids[min_id].image.convertTo(centroids[min_id].image, CV_8UC3);
-		}
-		else {
-			centroids.push_back(Tile(floors[i].image.clone()));
-			clusters.push_back(vector<int>());
-			clusters.back().push_back(i);
-			floors[i].cluster_id = centroids.size() - 1;
-		}
-	}
+	cvutils::clusterImages(floors, labels, centroids);
 
 	cout << "Facade segmentation:" << endl;
-	for (int i = 0; i < floors.size(); ++i) {
-		cout << "class: " << floors[i].cluster_id << endl;
+	for (int i = 0; i < labels.size(); ++i) {
+		cout << "class: " << labels[i] << endl;
 	}
 }
 
-void augumentTiles(const vector<Tile>& centroids, const vector<Tile>& tiles, vector<Tile>& augumented_tiles, int N) {
+void augumentTiles(const vector<int>& labels, vector<int>& augumented_tiles, int N) {
 	vector<pair<int, int>> repetition;
-	for (int i = 0; i < tiles.size();) {
-		repetition.push_back(make_pair(tiles[i].cluster_id, 1));
+	for (int i = 0; i < labels.size();) {
+		repetition.push_back(make_pair(labels[i], 1));
 		int next = i + 1;
-		for (; next < tiles.size(); ++next) {
-			if (tiles[i].cluster_id == tiles[next].cluster_id) {
+		for (; next < labels.size(); ++next) {
+			if (labels[i] == labels[next]) {
 				repetition.back().second++;
 			}
 			else {
@@ -1149,7 +1102,7 @@ void augumentTiles(const vector<Tile>& centroids, const vector<Tile>& tiles, vec
 		i = next;
 	}
 
-	if (tiles.size() != N) {
+	if (labels.size() != N) {
 		int total_repetition = 0;
 		for (int i = 0; i < repetition.size(); ++i) {
 			if (repetition[i].second > 1) {
@@ -1158,7 +1111,7 @@ void augumentTiles(const vector<Tile>& centroids, const vector<Tile>& tiles, vec
 		}
 
 		int total_floors = 0;
-		float ratio = (float)(N - tiles.size()) / total_repetition;
+		float ratio = (float)(N - labels.size()) / total_repetition;
 		for (int i = 0; i < repetition.size(); ++i) {
 			if (repetition[i].second > 1) {
 				repetition[i].second += repetition[i].second * ratio;
@@ -1181,38 +1134,32 @@ void augumentTiles(const vector<Tile>& centroids, const vector<Tile>& tiles, vec
 	int index = 0;
 	for (int i = 0; i < repetition.size(); ++i) {
 		for (int j = 0; j < repetition[i].second; ++j) {
-			augumented_tiles[index] = Tile(centroids[repetition[i].first].image);
-			augumented_tiles[index].cluster_id = repetition[i].first;
+			augumented_tiles[index] = repetition[i].first;
 			index++;
 		}
 	}
 }
 
-float compute_similarity(const vector<Tile>& tiles, const vector<int> terminals) {
-	vector<int> labels;
-	for (int i = 0; i < tiles.size(); ++i) {
-		labels.push_back(tiles[i].cluster_id);
-	}
-
-	utils::findBestAssignment(terminals, labels);
+float compute_similarity(const vector<int>& labels, const vector<int> terminals) {
+	vector<int> mapping = utils::findBestAssignment(labels, terminals);
 
 	float sim = 0.0f;
 	for (int i = 0; i < labels.size(); ++i) {
-		if (labels[i] == terminals[i]) sim++;
+		if (mapping[labels[i]] == terminals[i]) sim++;
 	}
 
 	return sim;
 }
 
-void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) {
+void findBestFacadeGrammar(vector<int>& labels) {
 	int N = 10;
 
-	vector<Tile> augumented_floors;
-	augumentTiles(centroids, floors, augumented_floors, N);
+	vector<int> augumented_labels;
+	augumentTiles(labels, augumented_labels, N);
 
 	cout << "Facade segmentation augmented:" << endl;
-	for (int i = 0; i < augumented_floors.size(); ++i) {
-		cout << "class: " << augumented_floors[i].cluster_id << endl;
+	for (int i = 0; i < augumented_labels.size(); ++i) {
+		cout << "class: " << augumented_labels[i] << endl;
 	}
 
 	vector<int> grammar_terminals(N);
@@ -1221,7 +1168,7 @@ void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) 
 	for (int i = 0; i < N; ++i) {
 		grammar_terminals[i] = 0;
 	}
-	float min_sim = compute_similarity(augumented_floors, grammar_terminals);
+	float min_sim = compute_similarity(augumented_labels, grammar_terminals);
 	int min_id = 0;
 
 	// facade grammar #2
@@ -1233,7 +1180,7 @@ void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) 
 			grammar_terminals[i] = 1;
 		}
 	}
-	float sim = compute_similarity(augumented_floors, grammar_terminals);
+	float sim = compute_similarity(augumented_labels, grammar_terminals);
 	if (sim > min_sim) {
 		min_sim = sim;
 		min_id = 1;
@@ -1248,7 +1195,7 @@ void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) 
 			grammar_terminals[i] = 1;
 		}
 	}
-	sim = compute_similarity(augumented_floors, grammar_terminals);
+	sim = compute_similarity(augumented_labels, grammar_terminals);
 	if (sim > min_sim) {
 		min_sim = sim;
 		min_id = 2;
@@ -1266,142 +1213,93 @@ void findBestFacadeGrammar(const vector<Tile>& centroids, vector<Tile>& floors) 
 			grammar_terminals[i] = 2;
 		}
 	}
-	sim = compute_similarity(augumented_floors, grammar_terminals);
+	sim = compute_similarity(augumented_labels, grammar_terminals);
 	if (sim > min_sim) {
 		min_sim = sim;
 		min_id = 3;
 	}
 
-	// facade grammar #5
-	for (int i = 0; i < N; ++i) {
-		if (i == 0) {
-			grammar_terminals[i] = 0;
-		}
-		else if (i == 1) {
-			grammar_terminals[i] = 1;
-		}
-		else if (i < N - 1) {
-			grammar_terminals[i] = 2;
-		}
-		else {
-			grammar_terminals[i] = 3;
-		}
-	}
-	sim = compute_similarity(augumented_floors, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 4;
-	}
-
 	cout << "Best grammar: " << min_id << endl;
 
 	if (min_id == 0) {
-		for (int i = 0; i < floors.size(); ++i) {
-			floors[i].cluster_id = 0;
+		for (int i = 0; i < labels.size(); ++i) {
+			labels[i] = 0;
 		}
 	}
 	else if (min_id == 1) {
-		for (int i = 0; i < floors.size(); ++i) {
-			if (i < floors.size() - 1) {
-				floors[i].cluster_id = 0;
+		for (int i = 0; i < labels.size(); ++i) {
+			if (i < labels.size() - 1) {
+				labels[i] = 0;
 			}
 			else {
-				floors[i].cluster_id = 1;
+				labels[i] = 1;
 			}
 		}
 	}
 	else if (min_id == 2) {
-		for (int i = 0; i < floors.size(); ++i) {
+		for (int i = 0; i < labels.size(); ++i) {
 			if (i == 0) {
-				floors[i].cluster_id = 0;
+				labels[i] = 0;
 			}
 			else {
-				floors[i].cluster_id = 1;
+				labels[i] = 1;
 			}
 		}
 	}
 	else if (min_id == 3) {
-		for (int i = 0; i < floors.size(); ++i) {
+		for (int i = 0; i < labels.size(); ++i) {
 			if (i == 0) {
-				floors[i].cluster_id = 0;
+				labels[i] = 0;
 			}
-			else if (i < floors.size() - 1) {
-				floors[i].cluster_id = 1;
+			else if (i < labels.size() - 1) {
+				labels[i] = 1;
 			}
 			else {
-				floors[i].cluster_id = 2;
+				labels[i] = 2;
 			}
 		}
 	}
 	else if (min_id == 4) {
-		for (int i = 0; i < floors.size(); ++i) {
+		for (int i = 0; i < labels.size(); ++i) {
 			if (i == 0) {
-				floors[i].cluster_id = 0;
+				labels[i] = 0;
 			}
 			else if (i == 1) {
-				floors[i].cluster_id = 1;
+				labels[i] = 1;
 			}
-			else if (i < floors.size() - 1) {
-				floors[i].cluster_id = 2;
+			else if (i < labels.size() - 1) {
+				labels[i] = 2;
 			}
 			else {
-				floors[i].cluster_id = 3;
+				labels[i] = 3;
 			}
 		}
 	}
 }
 
-void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split) {
-	vector<vector<Tile>> tiles(y_split.size() - 1);
-
+void clusterTiles(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, vector<vector<cv::Mat>>& tiles, vector<vector<int>>& labels, vector<cv::Mat>& centroids) {
+	vector<cv::Mat> lin_tiles((y_split.size() - 1) * (x_split.size() - 1));
 	for (int i = 0; i < y_split.size() - 1; ++i) {
-		tiles[i].resize(x_split.size() - 1);
+		int y = y_split[y_split.size() - i - 2];
+		int height = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+		
 		for (int j = 0; j < x_split.size() - 1; ++j) {
-			int width = x_split[j + 1] - x_split[j];
-			int height = y_split[i + 1] - y_split[i];
-			tiles[i][j] = Tile(cv::Mat(img, cv::Rect(x_split[j], y_split[i], width, height)));
+			lin_tiles[i * (x_split.size() - 1) + j] = cv::Mat(img, cv::Rect(x_split[j], y, x_split[j + 1] - x_split[j], height));
 		}
 	}
 
-	vector<vector<pair<int, int>>> clusters;
-	vector<Tile> centroids;
-	for (int i = 0; i < tiles.size(); ++i) {
-		for (int j = 0; j < tiles[i].size(); ++j) {
-			float min_dist = numeric_limits<float>::max();
-			int min_id;
-			for (int k = 0; k < centroids.size(); ++k) {
-				float dist = compute_dist(tiles[i][j], centroids[k]);
-				if (dist < min_dist) {
-					min_dist = dist;
-					min_id = k;
-				}
-			}
+	vector<int> lin_labels;
+	cvutils::clusterImages(lin_tiles, lin_labels, centroids);
 
-			if (min_dist < 2000) {
-				clusters[min_id].push_back(make_pair(i, j));
-				int width_total = 0;
-				int height_total = 0;
-				for (int k = 0; k < clusters[min_id].size(); ++k) {
-					width_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].image.cols;
-					height_total += tiles[clusters[min_id][k].first][clusters[min_id][k].second].image.rows;
-				}
-				//centroids[min_id].width = width_total / clusters[min_id].size();
-				//centroids[min_id].height = height_total / clusters[min_id].size();
-				centroids[min_id].image = cv::Mat(centroids[min_id].image.rows, centroids[min_id].image.cols, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
-				for (int k = 0; k < clusters[min_id].size(); ++k) {
-					cv::Mat img;
-					cv::resize(tiles[clusters[min_id][k].first][clusters[min_id][k].second].image, img, cv::Size(centroids[min_id].image.cols, centroids[min_id].image.rows));
-					img.convertTo(img, CV_32FC3);
-					centroids[min_id].image += img;
-				}
-				centroids[min_id].image /= clusters[min_id].size();
-				centroids[min_id].image.convertTo(centroids[min_id].image, CV_8UC3);
-			}
-			else {
-				centroids.push_back(Tile(tiles[i][j].image.clone()));
-				clusters.push_back(vector<pair<int, int>>());
-				clusters.back().push_back(make_pair(i, j));
-			}
+	tiles.resize(y_split.size() - 1);
+	labels.resize(y_split.size() - 1);
+	for (int i = 0; i < tiles.size(); ++i) {
+		tiles[i].resize(x_split.size() - 1);
+		labels[i].resize(x_split.size() - 1);
+
+		for (int j = 0; j < tiles[i].size(); ++j) {
+			tiles[i][j] = lin_tiles[i * (x_split.size() - 1) + j];
+			labels[i][j] = lin_labels[i * (x_split.size() - 1) + j];
 		}
 	}
 }
@@ -1538,24 +1436,27 @@ void subdivideFacade(const cv::Mat& img) {
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
 
 	// 各floorのsimilarityを計算する
-	vector<Tile> floors;
-	vector<Tile> centroids;
-	clusterFloors(img, y_split, floors, centroids);
-	outputFacadeSegmentation(img, y_split, floors, "facade_labeled.png");
+	vector<cv::Mat> floors;
+	vector<cv::Mat> centroids;
+	vector<int> floor_labels;
+	clusterFloors(img, y_split, floors, floor_labels, centroids);
+	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled.png");
 
 	// 最も類似するfacade grammarを探す
-	findBestFacadeGrammar(centroids, floors);
-	outputFacadeSegmentation(img, y_split, floors, "facade_labeled_refined.png");
+	findBestFacadeGrammar(floor_labels);
+	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled_refined.png");
 
 	// 各tileのsimilarityを計算する
-	clusterTiles(img, y_split, x_split);
+	vector<vector<cv::Mat>> tiles;
+	vector<vector<int>> tile_labels;
+	clusterTiles(img, y_split, x_split, tiles, tile_labels, centroids);
 }
 
 int main() {
 	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade3.png");
 
 	subdivideFacade(img);
 

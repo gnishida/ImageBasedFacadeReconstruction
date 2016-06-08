@@ -12,7 +12,7 @@ namespace utils {
 	/**
 	 * ２つの数列がベストマッチするよう、２つ目の数列を変換する。
 	 */
-	void findBestAssignment(const std::vector<int>& labels1, std::vector<int>& labels2) {
+	std::vector<int> findBestAssignment(const std::vector<int>& labels1, const std::vector<int>& labels2) {
 		int cardinality = 0;
 		for (int i = 0; i < labels1.size(); ++i) {
 			if (labels1[i] > cardinality) cardinality = labels1[i];
@@ -32,7 +32,7 @@ namespace utils {
 		do {
 			int dist = 0;
 			for (int i = 0; i < labels1.size(); ++i) {
-				if (labels1[i] != mapping[labels2[i]]) {
+				if (mapping[labels1[i]] != labels2[i]) {
 					dist++;
 				}
 			}
@@ -44,8 +44,6 @@ namespace utils {
 
 		} while (std::next_permutation(mapping.begin(), mapping.end()));
 
-		for (int i = 0; i < labels2.size(); ++i) {
-			labels2[i] = min_mapping[labels2[i]];
-		}
+		return min_mapping;
 	}
 }

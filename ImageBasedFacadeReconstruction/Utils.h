@@ -1,10 +1,11 @@
 #pragma once
 
 #include <vector>
+#include <map>
 
 namespace utils {
 
 	float gause(float u, float sigma);
 
-	void findBestAssignment(const std::vector<int>& labels1, std::vector<int>& labels2);
+	std::vector<int> findBestAssignment(const std::vector<int>& labels1, const std::vector<int>& labels2);
 }

@@ -25,5 +25,8 @@ namespace cvutils {
 	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
+
+	float computeImageDist(const cv::Mat& img1, const cv::Mat& img2);
+	void clusterImages(const vector<cv::Mat>& images, vector<int>& labels, vector<cv::Mat>& centers);
 }
 
