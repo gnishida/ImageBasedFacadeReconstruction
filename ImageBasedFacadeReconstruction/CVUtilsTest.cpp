@@ -99,12 +99,12 @@ namespace cvutils {
 	void test_corr() {
 		cv::Mat A1 = (cv::Mat_<unsigned char>(3, 3) << 0, 1, 4, 2, 3, 5, 5, 1, 3);
 		if (corr(A1, A1) != 1.0) {
-			cerr << "test_corr() failed." << endl;
+			cerr << "test_corr() failed #1." << endl;
 		}
 
 		cv::Mat A2 = (cv::Mat_<unsigned char>(3, 3) << 1, 1, 2, 2, 2, 3, 4, 1, 0);
-		if (abs(corr(A1, A2) * 12.0 - 11.0) < 0.001) {
-			cerr << "test_corr() failed." << endl;
+		if (abs(corr(A1, A2) * 12.0 - 11.0) > 0.000001) {
+			cerr << "test_corr() failed #2." << endl;
 		}
 
 		cout << "test_corr() done." << endl;
