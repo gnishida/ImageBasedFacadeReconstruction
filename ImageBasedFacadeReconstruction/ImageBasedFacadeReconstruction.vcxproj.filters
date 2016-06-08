@@ -24,28 +24,25 @@
     <ClCompile Include="Utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="CVUtilsTest.h">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="CVUtilsTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="visualization.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="CVUtilsTest.h">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Utils.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="visualization.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ibfr.h">
-      <Filter>Source Files</Filter>
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

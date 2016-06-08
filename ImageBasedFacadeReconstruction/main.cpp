@@ -18,7 +18,6 @@
 #include "Utils.h"
 #include <time.h>
 #include "CVUtilsTest.h"
-#include "ibfr.h"
 #include "visualization.h"
 
 #ifndef SQR
