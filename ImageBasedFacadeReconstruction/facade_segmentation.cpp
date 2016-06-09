@@ -374,7 +374,7 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
  * @param rect					
  * @return						分割する場合はtrue / false otherwise
  */
-bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int tile_margin, cv::Rect& rect) {
+bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int tile_margin, WindowPos& winpos) {
 	if (tile.cols < min_size || tile.rows < min_size) return false;
 
 	//cv::imwrite("tile.png", tile);
@@ -482,12 +482,11 @@ bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int 
 	if (y1 == -1 || y2 == -1 || y1 == y2) return false;
 
 
-	cv::Mat result = tile.clone();
+	/*cv::Mat result = tile.clone();
 	cv::rectangle(result, cv::Point(x1, y1), cv::Point(x2, y2), cv::Scalar(255, 0, 0), 1);
-	cv::imwrite("tile_window.png", result);
+	cv::imwrite("tile_window.png", result);*/
 
-
-	rect = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
+	winpos = WindowPos(x1, y1, tile.cols - 1 - x2, tile.rows - 1 - y2);
 
 	return true;
 }
@@ -736,15 +735,13 @@ void refineSplitLines(vector<float>& split_positions) {
 	}
 }
 
-void mergeEmptyRegion(vector<float>& y_split, vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, vector<vector<cv::Rect>>& refined_window_rects) {
-	refined_window_rects = window_rects;
-
+void refine(vector<float>& y_split, vector<float>& x_split, vector<vector<WindowPos>>& winpos) {
 	// 各フロアの窓の数をカウントする
 	vector<int> win_per_row(y_split.size() - 1, 0);
 	int max_win_per_row = 0;
 	for (int i = 0; i < y_split.size() - 1; ++i) {
 		for (int j = 0; j < x_split.size() - 1; ++j) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
+			if (winpos[i][j].valid) {
 				win_per_row[i]++;
 			}
 		}
@@ -758,7 +755,7 @@ void mergeEmptyRegion(vector<float>& y_split, vector<float>& x_split, const vect
 	int max_win_per_col = 0;
 	for (int j = 0; j < x_split.size() - 1; ++j) {
 		for (int i = 0; i < y_split.size() - 1; ++i) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
+			if (winpos[i][j].valid) {
 				win_per_col[j]++;
 			}
 		}
@@ -774,7 +771,7 @@ void mergeEmptyRegion(vector<float>& y_split, vector<float>& x_split, const vect
 			is_wall_row[i] = true;
 
 			for (int j = 0; j < x_split.size() - 1; ++j) {
-				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+				winpos[i][j].valid = false;
 			}
 		}
 	}
@@ -786,109 +783,29 @@ void mergeEmptyRegion(vector<float>& y_split, vector<float>& x_split, const vect
 			is_wall_col[j] = true;
 
 			for (int i = 0; i < y_split.size() - 1; ++i) {
-				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+				winpos[i][j].valid = false;
 			}
 		}
 	}
 
-	// 窓のないフロアが連続している場合は、連結する
-	for (int i = 0; i < is_wall_row.size() - 1;) {
-		if (is_wall_row[i] && is_wall_row[i + 1]) {
-			is_wall_row.erase(is_wall_row.begin() + i + 1);
-			y_split.erase(y_split.begin() + i + 1);
-			refined_window_rects.erase(refined_window_rects.begin() + i + 1);
-		}
-		else {
-			i++;
-		}
-	}
-
-	// 窓のないカラムが連続している場合は、連結する
-	for (int j = 0; j < is_wall_col.size() - 1;) {
-		if (is_wall_col[j] && is_wall_col[j + 1]) {
-			is_wall_col.erase(is_wall_col.begin() + j + 1);
-			x_split.erase(x_split.begin() + j + 1);
-			for (int i = 0; i < y_split.size() - 1; ++i) {
-				refined_window_rects[i].erase(refined_window_rects[i].begin() + j + 1);
-			}
-		}
-		else {
-			j++;
-		}
-	}
-}
-
-void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, vector<vector<cv::Rect>>& refined_window_rects) {
-	refined_window_rects = window_rects;
-
-	// 各フロアの窓の数をカウントする
-	vector<int> win_per_row(y_split.size() - 1, 0);
-	int max_win_per_row = 0;
-	for (int i = 0; i < y_split.size() - 1; ++i) {
-		for (int j = 0; j < x_split.size() - 1; ++j) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
-				win_per_row[i]++;
-			}
-		}
-		if (win_per_row[i] > max_win_per_row) {
-			max_win_per_row = win_per_row[i];
-		}
-	}
-
-	// 各カラムの窓の数をカウントする
-	vector<int> win_per_col(x_split.size() - 1, 0);
-	int max_win_per_col = 0;
-	for (int j = 0; j < x_split.size() - 1; ++j) {
-		for (int i = 0; i < y_split.size() - 1; ++i) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
-				win_per_col[j]++;
-			}
-		}
-		if (win_per_col[j] > max_win_per_col) {
-			max_win_per_col = win_per_col[j];
-		}
-	}
-
-	// 壁のフロアかどうかチェックする
-	vector<bool> is_wall_row(y_split.size() - 1, false);
-	for (int i = 0; i < y_split.size() - 1; ++i) {
-		if (win_per_row[i] < max_win_per_row * 0.2) {
-			is_wall_row[i] = true;
-
-			for (int j = 0; j < x_split.size() - 1; ++j) {
-				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
-			}
-		}
-	}
-
-	// 壁のカラムかどうかチェックする
-	vector<bool> is_wall_col(x_split.size() - 1, false);
-	for (int j = 0; j < x_split.size() - 1; ++j) {
-		if (win_per_col[j] < max_win_per_col * 0.2) {
-			is_wall_col[j] = true;
-
-			for (int i = 0; i < y_split.size() - 1; ++i) {
-				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
-			}
-		}
-	}
-
+#if 0
 	// 窓のX座標をvoteする
 	for (int j = 0; j < x_split.size() - 1; ++j) {
 		if (is_wall_col[j]) continue;
 
-		int x1, x2;
+		//int x1, x2;
+		int max_left, max_right;
 
 		// voteする
 		vector<float> histogram1(x_split[j + 1] - x_split[j], 0);
 		vector<float> histogram2(x_split[j + 1] - x_split[j], 0);
 		for (int i = 0; i < y_split.size() - 1; ++i) {
 			if (is_wall_row[i]) continue;
-			if (window_rects[i][j].width == 0 && window_rects[i][j].height == 0) continue;
+			if (!winpos[i][j].valid) continue;
 
 			for (int c = 0; c < histogram1.size(); ++c) {
-				histogram1[c] += utils::gause(window_rects[i][j].x - c, 2);
-				histogram2[c] += utils::gause(window_rects[i][j].x + window_rects[i][j].width - 1 - c, 2);
+				histogram1[c] += utils::gause(winpos[i][j].left - c, 2);
+				histogram2[c] += utils::gause(winpos[i][j].right - c, 2);
 			}
 		}
 
@@ -898,11 +815,11 @@ void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<
 		for (int c = 0; c < histogram1.size(); ++c) {
 			if (histogram1[c] > max_val1) {
 				max_val1 = histogram1[c];
-				x1 = c;
+				max_left = c;
 			}
 			if (histogram2[c] > max_val2) {
 				max_val2 = histogram2[c];
-				x2 = c;
+				max_right = c;
 			}
 		}
 
@@ -911,7 +828,7 @@ void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<
 			if (is_wall_row[r]) continue;
 
 			if (r == 0 || r == y_split.size() - 1) {
-				int new_x = window_rects[r][j].x;
+				int new_x = winpos[r][j].left;
 				int new_width = window_rects[r][j].width;
 				if (abs(window_rects[r][j].x - x1) < 5) {
 					new_x = x1;
@@ -923,8 +840,8 @@ void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<
 				refined_window_rects[r][j].width = new_width;
 			}
 			else {
-				refined_window_rects[r][j].x = x1;
-				refined_window_rects[r][j].width = x2 - x1 + 1;
+				refined_winpos[r][j].left = max_left;
+				refined_winpos[r][j].right = max_right;
 			}
 		}
 	}
@@ -970,13 +887,14 @@ void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<
 			refined_window_rects[i][c].height = y2 - y1 + 1;
 		}
 	}
+#endif
 
 	// 窓のないフロアが連続している場合は、連結する
 	for (int i = 0; i < is_wall_row.size() - 1;) {
 		if (is_wall_row[i] && is_wall_row[i + 1]) {
 			is_wall_row.erase(is_wall_row.begin() + i + 1);
 			y_split.erase(y_split.begin() + i + 1);
-			refined_window_rects.erase(refined_window_rects.begin() + i + 1);
+			winpos.erase(winpos.begin() + i + 1);
 		}
 		else {
 			i++;
@@ -989,11 +907,110 @@ void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<
 			is_wall_col.erase(is_wall_col.begin() + j + 1);
 			x_split.erase(x_split.begin() + j + 1);
 			for (int i = 0; i < y_split.size() - 1; ++i) {
-				refined_window_rects[i].erase(refined_window_rects[i].begin() + j + 1);
+				winpos[i].erase(winpos[i].begin() + j + 1);
 			}
 		}
 		else {
 			j++;
 		}
 	}
+}
+
+void align(const vector<float>& y_split, const vector<float>& x_split, vector<vector<WindowPos>>& winpos) {
+	// 窓のX座標をvoteする
+	for (int j = 0; j < x_split.size() - 1; ++j) {
+		int max_left, max_right;
+
+		// voteする
+		vector<float> histogram1(x_split[j + 1] - x_split[j], 0);
+		vector<float> histogram2(x_split[j + 1] - x_split[j], 0);
+		int count = 0;
+		for (int i = 0; i < y_split.size() - 1; ++i) {
+			if (!winpos[i][j].valid) continue;
+
+			count++;
+			for (int c = 0; c < histogram1.size(); ++c) {
+				histogram1[c] += utils::gause(winpos[i][j].left - c, 2);
+				histogram2[c] += utils::gause(winpos[i][j].right - c, 2);
+			}
+		}
+
+		if (count == 0) continue;
+
+		// max voteを探す
+		float max_val1 = 0.0f;
+		float max_val2 = 0.0f;
+		for (int c = 0; c < histogram1.size(); ++c) {
+			if (histogram1[c] > max_val1) {
+				max_val1 = histogram1[c];
+				max_left = c;
+			}
+			if (histogram2[c] > max_val2) {
+				max_val2 = histogram2[c];
+				max_right = c;
+			}
+		}
+
+		// 全てのフロアの窓のX座標をそろえる
+		for (int r = 0; r < y_split.size() - 1; ++r) {
+			if (!winpos[r][j].valid) continue;
+
+			if (r == 0 || r == y_split.size() - 1) {
+				if (abs(winpos[r][j].left - max_left) < 5) {
+					winpos[r][j].left = max_left;
+				}
+				if (abs(winpos[r][j].right - max_right) < 5) {
+					winpos[r][j].right = max_right;
+				}
+			}
+			else {
+				winpos[r][j].left = max_left;
+				winpos[r][j].right = max_right;
+			}
+		}
+	}
+
+	// 窓のY座標をvoteする
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		int max_top, max_bottom;
+
+		// voteする
+		vector<float> histogram1(y_split[i + 1] - y_split[i], 0);
+		vector<float> histogram2(y_split[i + 1] - y_split[i], 0);
+		int count = 0;
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			if (!winpos[i][j].valid) continue;
+
+			count++;
+			for (int r = 0; r < histogram1.size(); ++r) {
+				histogram1[r] += utils::gause(winpos[i][j].top - r, 2);
+				histogram2[r] += utils::gause(winpos[i][j].bottom - r, 2);
+			}
+		}
+
+		if (count == 0) continue;
+
+		// max voteを探す
+		float max_val1 = 0.0f;
+		float max_val2 = 0.0f;
+		for (int r = 0; r < histogram1.size(); ++r) {
+			if (histogram1[r] > max_val1) {
+				max_val1 = histogram1[r];
+				max_top = r;
+			}
+			if (histogram2[r] > max_val2) {
+				max_val2 = histogram2[r];
+				max_bottom = r;
+			}
+		}
+
+		// 全てのカラムの窓のY座標をそろえる
+		for (int c = 0; c < x_split.size() - 1; ++c) {
+			if (!winpos[i][c].valid) continue;
+
+			winpos[i][c].top = max_top;
+			winpos[i][c].bottom = max_bottom;
+		}
+	}
+
 }

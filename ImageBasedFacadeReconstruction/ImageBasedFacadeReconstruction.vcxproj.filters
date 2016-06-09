@@ -50,5 +50,8 @@
     <ClInclude Include="facade_segmentation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ibfr.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

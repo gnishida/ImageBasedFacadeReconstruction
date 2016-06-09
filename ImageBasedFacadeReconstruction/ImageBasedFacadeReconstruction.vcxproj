@@ -134,6 +134,7 @@
   <ItemGroup>
     <ClInclude Include="CVUtils.h" />
     <ClInclude Include="facade_segmentation.h" />
+    <ClInclude Include="ibfr.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="visualization.h" />
   </ItemGroup>

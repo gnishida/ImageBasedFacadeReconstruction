@@ -302,6 +302,38 @@ vector<int> findBestFloorGrammar(const vector<int>& labels) {
 		refined_labels = converted_labels;
 	}
 
+	// floor grammar #5 (Example 1のため)
+	for (int i = 0; i < N; ++i) {
+		int mid = N / 2;
+		if (i == 0) {
+			grammar_terminals[i] = 0;
+		}
+		else if (i < mid - 1 && i % 2 == 1) {
+			grammar_terminals[i] = 1;
+		}
+		else if (i < mid - 1 && i % 2 == 0) {
+			grammar_terminals[i] = 2;
+		}
+		else if (i == mid - 1 || i == mid) {
+			grammar_terminals[i] = 1;
+		}
+		else if (i < N - 1 & i % 2 == 1) {
+			grammar_terminals[i] = 2;
+		}
+		else if (i < N - 1 && i % 2 == 0) {
+			grammar_terminals[i] = 1;
+		}
+		else {
+			grammar_terminals[i] = 3;
+		}
+	}
+	sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 4;
+		refined_labels = converted_labels;
+	}
+
 	cout << "Best grammar: " << best_id << endl;
 
 	return refined_labels;
@@ -342,84 +374,52 @@ vector<float> estimateColumnParams(const cv::Mat& img, const vector<float>& x_sp
 	return refined_x_split;
 }
 
-vector<float> estimateFloorParams(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<int>>& labels) {
-	// カラムをグループ分けする
-	map<int, int> column_group;
-	for (int group_id = 0;; ++group_id) {
-		list<pair<int, int>> queue;
+vector<vector<WindowPos>> estimateWinParams(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, vector<vector<int>>& labels, vector<vector<WindowPos>>& winpos) {
+	vector<vector<WindowPos>> refined_winpos;
 
-		bool new_group = false;
-		for (int j = 0; j < labels[0].size(); ++j) {
-			if (column_group.find(j) == column_group.end()) {
-				new_group = true;
-				column_group[j] = group_id;
-				for (int i = 0; i < labels.size(); ++i) {
-					queue.push_back(make_pair(i, j));
-				}
-				break;
-			}
-		}
-
-		// 全てのカラムがグループ分けされたら、終了
-		if (!new_group) break;
-
-		while (!queue.empty()) {
-			pair<int, int> cur = queue.front();
-			queue.pop_front();
-			int cur_y = cur.first;
-			int cur_x = cur.second;
-			int label = labels[cur_y][cur_x];
-
-			for (int j = 0; j < labels[cur_y].size(); ++j) {
-				if (j == cur_x) continue;
-
-				if (labels[cur_y][j] == label) {
-					if (column_group.find(j) == column_group.end()) {
-						column_group[j] = group_id;
-						for (int i = 0; i < labels.size(); ++i) {
-							if (i == cur_y) continue;
-							queue.push_back(make_pair(i, j));
-						}
-					}
-				}
-			}
-
-
+	map<int, vector<WindowPos>> cluster_winpos;
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			cluster_winpos[labels[y_split.size() - 2 - i][j]].push_back(winpos[i][j]);
 		}
 	}
 
-	map<int, pair<float, int>> param_set;
-	for (int i = 0; i < x_split.size() - 1; ++i) {
-		int width = x_split[i + 1] - x_split[i];
+	map<int, WindowPos> avg_winpos;
+	for (auto it = cluster_winpos.begin(); it != cluster_winpos.end(); ++it) {
+		float left_total = 0.0f;
+		float right_total = 0.0f;
+		float top_total = 0.0f;
+		float bottom_total = 0.0f;
+		int count = 0;
 
-		if (param_set.find(column_group[i]) == param_set.end()) {
-			param_set[column_group[i]] = make_pair(0, 0);
+		for (int k = 0; k < it->second.size(); ++k) {
+			if (!it->second[k].valid) continue;
+
+			left_total += it->second[k].left;
+			right_total += it->second[k].right;
+			top_total += it->second[k].top;
+			bottom_total += it->second[k].bottom;
+			count++;
 		}
-		param_set[column_group[i]].first += width;
-		param_set[column_group[i]].second++;
+
+		if (count == 0) {
+			avg_winpos[it->first].valid = false;
+		}
+		else {
+			avg_winpos[it->first] = WindowPos(left_total / count, top_total / count, right_total / count, bottom_total / count);
+		}
 	}
 
-	vector<float> params(param_set.size());
-	for (auto it = param_set.begin(); it != param_set.end(); ++it) {
-		// compute the average size by dividing the total size by the cound
-		params[it->first] = it->second.first / it->second.second;
+	refined_winpos.resize(winpos.size());
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		refined_winpos[i].resize(winpos[i].size());
+
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			refined_winpos[i][j] = avg_winpos[labels[y_split.size() - 2 - i][j]];
+		}
 	}
 
-	// set the refined param values
-	vector<float> refined_x_split(x_split.size());
-	refined_x_split[0] = 0;
-	for (int i = 0; i < x_split.size() - 1; ++i) {
-		refined_x_split[i + 1] = refined_x_split[i] + params[column_group[i]];
-	}
-
-	float ratio = (float)refined_x_split.back() / img.cols;
-
-	for (int i = 0; i < refined_x_split.size() - 1; ++i) {
-		refined_x_split[i] *= ratio;
-	}
-	refined_x_split.back() = img.cols;
-
-	return refined_x_split;
+	return refined_winpos;
 }
 
 void clusterColumns(const cv::Mat& img, const vector<float>& x_split, int max_cluster, vector<cv::Mat>& columns, vector<int>& labels, vector<cv::Mat>& centroids) {
@@ -550,7 +550,7 @@ void subdivideFacade(const cv::Mat& img) {
 #endif
 	
 	// 各tileの窓の位置を求める
-	vector<vector<cv::Rect>> window_rects;
+	vector<vector<WindowPos>> window_rects;
 	int window_count = 0;
 	window_rects.resize(y_split.size() - 1);
 	for (int i = 0; i < y_split.size() - 1; ++i) {
@@ -562,7 +562,7 @@ void subdivideFacade(const cv::Mat& img) {
 				window_count++;
 			}
 			else {
-				window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+				window_rects[i][j] = WindowPos();
 			}
 		}
 	}
@@ -570,9 +570,10 @@ void subdivideFacade(const cv::Mat& img) {
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows.png");
 
 	// 窓の位置をalignする
-	vector<vector<cv::Rect>> refined_window_rects;
-	refine(y_split, x_split, window_rects, refined_window_rects);
-	outputFacadeAndWindows(img, y_split, x_split, refined_window_rects, "facade_windows_refined.png");
+	vector<vector<WindowPos>> refined_window_rects;
+	refine(y_split, x_split, window_rects);
+	align(y_split, x_split, window_rects);
+	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
 
 	// 各floorのsimilarityを計算する
 	vector<cv::Mat> floors;
@@ -645,9 +646,9 @@ void subdivideFacade(const cv::Mat& img) {
 		x_split = estimateColumnParams(img, x_split, column_labels);
 		outputFloorSegmentation(img, y_split, x_split, all_labels, "floor_labeled_refined.png");
 
-		mergeEmptyRegion(y_split, x_split, refined_window_rects);
-
-		outputReconstructedFacade(img, y_split, x_split, all_labels, "facade_reconstructed.png");
+		window_rects = estimateWinParams(img, y_split, x_split, all_labels, window_rects);
+		outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_grammar_applied.png");
+		//outputReconstructedFacade(img, y_split, x_split, all_labels, "facade_reconstructed.png");
 	}
 }
 

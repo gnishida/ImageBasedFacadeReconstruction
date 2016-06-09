@@ -177,7 +177,7 @@ void outputFacadeStructure(const cv::Mat& img, const vector<float>& y_set, const
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeAndWindows(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename) {
+void outputFacadeAndWindows(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<WindowPos>>& winpos, const string& filename) {
 	cv::Mat result = img.clone();
 	for (int i = 0; i < y_split.size(); ++i) {
 		cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
@@ -187,8 +187,12 @@ void outputFacadeAndWindows(const cv::Mat& img, const vector<float>& y_split, co
 	}
 	for (int i = 0; i < y_split.size() - 1; ++i) {
 		for (int j = 0; j < x_split.size() - 1; ++j) {
-			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
-				cv::rectangle(result, cv::Rect(x_split[j] + window_rects[i][j].x, y_split[i] + window_rects[i][j].y, window_rects[i][j].width, window_rects[i][j].height), cv::Scalar(255, 0, 0), 1);
+			if (winpos[i][j].valid) {
+				int x1 = x_split[j] + winpos[i][j].left;
+				int y1 = y_split[i] + winpos[i][j].top;
+				int x2 = x_split[j + 1] - 1 - winpos[i][j].right;
+				int y2 = y_split[i + 1] - 1 - winpos[i][j].bottom;
+				cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), cv::Scalar(255, 0, 0), 1);
 			}
 		}
 	}
@@ -330,7 +334,6 @@ void outputReconstructedFacade(const cv::Mat& img, const vector<float>& y_split,
 			averaged_tiles[it->first] += tile;
 		}
 		averaged_tiles[it->first] /= it->second.size();
-		cv::imwrite("test.png", averaged_tiles[it->first]);
 	}
 
 	cv::Mat result(img.rows, img.cols, CV_32FC3);
