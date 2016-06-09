@@ -11,6 +11,10 @@ namespace utils {
 
 	/**
 	 * ２つの数列がベストマッチするよう、２つ目の数列を変換する。
+	 *
+	 * @param labels1	１つ目の数列
+	 * @param labels2	２つ目の数列
+	 * @return			ベストマッチするようなマッピング（１つ目の数列の要素を、２つ目の数列の要素に対応付ける）
 	 */
 	std::vector<int> findBestAssignment(const std::vector<int>& labels1, const std::vector<int>& labels2) {
 		int cardinality = 0;

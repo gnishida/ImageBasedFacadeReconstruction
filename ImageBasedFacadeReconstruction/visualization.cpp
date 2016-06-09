@@ -210,7 +210,7 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	}
 
 	// 原色パレットの作成
-	vector<cv::Scalar> predefined_colors(7);
+	vector<cv::Scalar> predefined_colors(13);
 	predefined_colors[0] = cv::Scalar(255, 0, 0);
 	predefined_colors[1] = cv::Scalar(0, 0, 255);
 	predefined_colors[2] = cv::Scalar(0, 255, 0);
@@ -218,10 +218,16 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	predefined_colors[4] = cv::Scalar(0, 255, 255);
 	predefined_colors[5] = cv::Scalar(255, 255, 0);
 	predefined_colors[6] = cv::Scalar(128, 128, 128);
+	predefined_colors[7] = cv::Scalar(128, 0, 0);
+	predefined_colors[8] = cv::Scalar(0, 0, 128);
+	predefined_colors[9] = cv::Scalar(0, 128, 0);
+	predefined_colors[10] = cv::Scalar(128, 0, 128);
+	predefined_colors[11] = cv::Scalar(0, 128, 128);
+	predefined_colors[12] = cv::Scalar(128, 128, 0);
 
 	// カラーパレットの作成
 	map<int, cv::Scalar> colors;
-	if (label_set.size() <= 7) {
+	if (label_set.size() <= 13) {
 		int count = 0;
 		for (auto it = label_set.begin(); it != label_set.end(); ++it, ++count) {
 			colors[it->first] = predefined_colors[count];
@@ -252,7 +258,7 @@ void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, con
 	}
 
 	// 原色パレットの作成
-	vector<cv::Scalar> predefined_colors(7);
+	vector<cv::Scalar> predefined_colors(13);
 	predefined_colors[0] = cv::Scalar(255, 0, 0);
 	predefined_colors[1] = cv::Scalar(0, 0, 255);
 	predefined_colors[2] = cv::Scalar(0, 255, 0);
@@ -260,10 +266,16 @@ void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, con
 	predefined_colors[4] = cv::Scalar(0, 255, 255);
 	predefined_colors[5] = cv::Scalar(255, 255, 0);
 	predefined_colors[6] = cv::Scalar(128, 128, 128);
+	predefined_colors[7] = cv::Scalar(128, 0, 0);
+	predefined_colors[8] = cv::Scalar(0, 0, 128);
+	predefined_colors[9] = cv::Scalar(0, 128, 0);
+	predefined_colors[10] = cv::Scalar(128, 0, 128);
+	predefined_colors[11] = cv::Scalar(0, 128, 128);
+	predefined_colors[12] = cv::Scalar(128, 128, 0);
 
 	// カラーパレットの作成
 	map<int, cv::Scalar> colors;
-	if (label_set.size() <= 7) {
+	if (label_set.size() <= 13) {
 		int count = 0;
 		for (auto it = label_set.begin(); it != label_set.end(); ++it, ++count) {
 			colors[it->first] = predefined_colors[count];

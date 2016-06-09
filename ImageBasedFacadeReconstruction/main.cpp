@@ -97,36 +97,40 @@ void augumentTiles(const vector<int>& labels, vector<int>& augumented_tiles, int
 	}
 }
 
-float compute_similarity(const vector<int>& labels, const vector<int> terminals) {
-	vector<int> mapping = utils::findBestAssignment(labels, terminals);
+/**
+ * ２つのラベル列の類似度を返却する。
+ *
+ * @param labels			推定されたラベル列
+ * @param terminals			Grammarから生成されたterminal列
+ * @param converted_labels	Grammarをconstraintとしてrefineしたラベル列の結果
+ * @return					類似度（一致するラベル数）
+ */
+float compute_similarity(const vector<int>& labels, const vector<int> terminals, vector<int>& converted_labels) {
+	vector<int> mapping = utils::findBestAssignment(terminals, labels);
+	converted_labels.resize(labels.size());
 
 	float sim = 0.0f;
 	for (int i = 0; i < labels.size(); ++i) {
-		if (mapping[labels[i]] == terminals[i]) sim++;
+		converted_labels[i] = mapping[terminals[i]];
+		if (mapping[terminals[i]] == labels[i]) sim++;
 	}
 
 	return sim;
 }
 
-void findBestFacadeGrammar(vector<int>& labels) {
-	int N = 20;
-
-	vector<int> augumented_labels;
-	augumentTiles(labels, augumented_labels, N);
-
-	cout << "Facade segmentation augmented:" << endl;
-	for (int i = 0; i < augumented_labels.size(); ++i) {
-		cout << "class: " << augumented_labels[i] << endl;
-	}
+vector<int> findBestFacadeGrammar(const vector<int>& labels) {
+	int N = labels.size();
 
 	vector<int> grammar_terminals(N);
+	vector<int> refined_labels;
+	vector<int> converted_labels;
 
 	// facade grammar #1
 	for (int i = 0; i < N; ++i) {
 		grammar_terminals[i] = 0;
 	}
-	float min_sim = compute_similarity(augumented_labels, grammar_terminals);
-	int min_id = 0;
+	float max_sim = compute_similarity(labels, grammar_terminals, refined_labels);
+	int best_id = 0;
 
 	// facade grammar #2
 	for (int i = 0; i < N; ++i) {
@@ -137,10 +141,11 @@ void findBestFacadeGrammar(vector<int>& labels) {
 			grammar_terminals[i] = 1;
 		}
 	}
-	float sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 1;
+	float sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 1;
+		refined_labels = converted_labels;
 	}
 
 	// facade grammar #3
@@ -152,10 +157,11 @@ void findBestFacadeGrammar(vector<int>& labels) {
 			grammar_terminals[i] = 1;
 		}
 	}
-	sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 2;
+	sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 2;
+		refined_labels = converted_labels;
 	}
 	
 	// facade grammar #4
@@ -170,68 +176,31 @@ void findBestFacadeGrammar(vector<int>& labels) {
 			grammar_terminals[i] = 2;
 		}
 	}
-	sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 3;
+	sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 3;
+		refined_labels = converted_labels;
 	}
 
-	cout << "Best grammar: " << min_id << endl;
+	cout << "Best grammar: " << best_id << endl;
 
-	if (min_id == 0) {
-		for (int i = 0; i < labels.size(); ++i) {
-			labels[i] = 0;
-		}
-	}
-	else if (min_id == 1) {
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i < labels.size() - 1) {
-				labels[i] = 0;
-			}
-			else {
-				labels[i] = 1;
-			}
-		}
-	}
-	else if (min_id == 2) {
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i == 0) {
-				labels[i] = 0;
-			}
-			else {
-				labels[i] = 1;
-			}
-		}
-	}
-	else if (min_id == 3) {
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i == 0) {
-				labels[i] = 0;
-			}
-			else if (i < labels.size() - 1) {
-				labels[i] = 1;
-			}
-			else {
-				labels[i] = 2;
-			}
-		}
-	}
+	return refined_labels;
 }
 
-void findBestFloorGrammar(vector<int>& labels) {
-	int N = 30;
-
-	vector<int> augumented_labels;
-	augumentTiles(labels, augumented_labels, N);
+vector<int> findBestFloorGrammar(const vector<int>& labels) {
+	int N = labels.size();
 
 	vector<int> grammar_terminals(N);
+	vector<int> refined_labels;
+	vector<int> converted_labels;
 
 	// floor grammar #1
 	for (int i = 0; i < N; ++i) {
 		grammar_terminals[i] = 0;
 	}
-	float min_sim = compute_similarity(augumented_labels, grammar_terminals);
-	int min_id = 0;
+	float max_sim = compute_similarity(labels, grammar_terminals, refined_labels);
+	int best_id = 0;
 
 	// floor grammar #2
 	for (int i = 0; i < N; ++i) {
@@ -245,10 +214,11 @@ void findBestFloorGrammar(vector<int>& labels) {
 			grammar_terminals[i] = 0;
 		}
 	}
-	float sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 1;
+	float sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 1;
+		refined_labels = converted_labels;
 	}
 
 	// floor grammar #3
@@ -270,86 +240,35 @@ void findBestFloorGrammar(vector<int>& labels) {
 			grammar_terminals[i] = 0;
 		}
 	}
-	sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 2;
+	sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 2;
+		refined_labels = converted_labels;
 	}
 
 	// floor grammar #4
 	for (int i = 0; i < N; ++i) {
-		if (i == 0) {
+		if (i % 2 == 0) {
 			grammar_terminals[i] = 0;
 		}
-		else if (i < N - 1 && i % 3 == 0) {
-			grammar_terminals[i] = 0;
-		}
-		else if (i < N - 1 && i % 3 != 0) {
+		else if (i < N - 1 && i % 2 != 0) {
 			grammar_terminals[i] = 1;
 		}
 		else {
 			grammar_terminals[i] = 0;
 		}
 	}
-	sim = compute_similarity(augumented_labels, grammar_terminals);
-	if (sim > min_sim) {
-		min_sim = sim;
-		min_id = 3;
+	sim = compute_similarity(labels, grammar_terminals, converted_labels);
+	if (sim > max_sim) {
+		max_sim = sim;
+		best_id = 3;
+		refined_labels = converted_labels;
 	}
 
-	cout << "Best grammar: " << min_id << endl;
+	cout << "Best grammar: " << best_id << endl;
 
-	if (min_id == 0) {
-		for (int i = 0; i < labels.size(); ++i) {
-			labels[i] = 0;
-		}
-	}
-	else if (min_id == 1) {
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i == 0) {
-				labels[i] = 0;
-			}
-			else if (i < labels.size() - 1) {
-				labels[i] = 1;
-			}
-			else {
-				labels[i] = 0;
-			}
-		}
-	}
-	else if (min_id == 2) {
-		int mid = labels.size() / 2;
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i == 0) {
-				labels[i] = 0;
-			}
-			else if (i < mid) {
-				labels[i] = 1;
-			}
-			else if (i == mid) {
-				labels[i] = 2;
-			}
-			else if (i > mid && i < labels.size() - 1) {
-				labels[i] = 1;
-			}
-			else {
-				labels[i] = 0;
-			}
-		}
-	}
-	else if (min_id == 3) {
-		for (int i = 0; i < labels.size(); ++i) {
-			if (i % 3 == 0) {
-				labels[i] = 0;
-			}
-			else if (i < labels.size() - 1 && i % 3 != 0) {
-				labels[i] = 1;
-			}
-			else {
-				labels[i] = 0;
-			}
-		}
-	}
+	return refined_labels;
 }
 
 void clusterTiles(const cv::Mat& img, const vector<int>& x_split, int max_cluster, vector<cv::Mat>& tiles, vector<int>& labels, vector<cv::Mat>& centroids) {
@@ -508,7 +427,7 @@ void subdivideFacade(const cv::Mat& img) {
 	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled.png");
 
 	// 最も類似するfacade grammarを探す
-	findBestFacadeGrammar(floor_labels);
+	floor_labels = findBestFacadeGrammar(floor_labels);
 	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled_refined.png");
 
 	// 各tileのsimilarityを計算する
@@ -553,7 +472,7 @@ void subdivideFacade(const cv::Mat& img) {
 		for (int i = 0; i < floor_centroids.size(); ++i) {
 			clusterTiles(floor_centroids[i], x_split, 4, tiles, tile_labels, tile_centroids);
 
-			findBestFloorGrammar(tile_labels);
+			tile_labels = findBestFloorGrammar(tile_labels);
 
 			// このクラスタに属する全てのフロアに、計算されたlabelをコピーする
 			for (int k = 0; k < all_labels.size(); ++k) {
