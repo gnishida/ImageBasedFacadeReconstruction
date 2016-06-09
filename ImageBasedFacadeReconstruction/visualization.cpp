@@ -10,7 +10,7 @@
 * @param h_max		h_max
 * @param filename	output file name
 */
-void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<int>& y_set, const string& filename, int lineWidth) {
+void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const vector<float>& y_set, const string& filename, int lineWidth) {
 	float max_S = cvutils::max(S_max);
 	float min_S = cvutils::min(S_max);
 	float max_h = cvutils::max(h_max);
@@ -49,11 +49,11 @@ void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 }
 
 void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& h_max, const string& filename, int lineWidth) {
-	vector<int> y_set;
+	vector<float> y_set;
 	outputFacadeStructureV(img, S_max, h_max, y_set, filename, lineWidth);
 }
 
-void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<int>& x_set, const string& filename, int lineWidth) {
+void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const vector<float>& x_set, const string& filename, int lineWidth) {
 	float max_S = cvutils::max(S_max);
 	float min_S = cvutils::min(S_max);
 	float max_w = cvutils::max(w_max);
@@ -92,11 +92,11 @@ void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, co
 }
 
 void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const string& filename, int lineWidth) {
-	vector<int> x_set;
+	vector<float> x_set;
 	outputFacadeStructureH(img, S_max, w_max, x_set, filename, lineWidth);
 }
 
-void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<int>& y_set, const vector<int>& x_set, const string& filename, int lineWidth) {
+void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const vector<float>& y_set, const vector<float>& x_set, const string& filename, int lineWidth) {
 	float max_SV = cvutils::max(SV_max);
 	float min_SV = cvutils::min(SV_max);
 	float max_h = cvutils::max(h_max);
@@ -160,12 +160,12 @@ void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, co
 }
 
 void outputFacadeStructure(const cv::Mat& img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& h_max, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& w_max, const string& filename, int lineWidth) {
-	vector<int> x_set;
-	vector<int> y_set;
+	vector<float> x_set;
+	vector<float> y_set;
 	outputFacadeStructure(img, SV_max, h_max, SH_max, w_max, y_set, x_set, filename, lineWidth);
 }
 
-void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const vector<int>& x_set, const string& filename, int lineWidth) {
+void outputFacadeStructure(const cv::Mat& img, const vector<float>& y_set, const vector<float>& x_set, const string& filename, int lineWidth) {
 	cv::Mat result = img.clone();
 
 	for (int i = 0; i < y_set.size(); ++i) {
@@ -177,7 +177,7 @@ void outputFacadeStructure(const cv::Mat& img, const vector<int>& y_set, const v
 	cv::imwrite(filename, result);
 }
 
-void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename) {
+void outputFacadeAndWindows(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, const string& filename) {
 	cv::Mat result = img.clone();
 	for (int i = 0; i < y_split.size(); ++i) {
 		cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
@@ -203,7 +203,7 @@ void outputFacadeAndWindows(const cv::Mat& img, const vector<int>& y_split, cons
  * @param floors	クラスタリング結果 (1Fから順番に格納されている)
  * @param filename	ファイル名
  */
-void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& labels, const string& filename) {
+void outputFacadeSegmentation(const cv::Mat& img, const vector<float>& y_split, const vector<int>& labels, const string& filename) {
 	map<int, bool> label_set;
 	for (int i = 0; i < labels.size(); ++i) {
 		label_set[labels[i]] = true;
@@ -249,7 +249,7 @@ void outputFacadeSegmentation(const cv::Mat& img, const vector<int>& y_split, co
 	cv::imwrite(filename.c_str(), result);
 }
 
-void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, const vector<int>& x_split, const vector<vector<int>>& labels, const string& filename) {
+void outputFloorSegmentation(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<int>>& labels, const string& filename) {
 	map<int, bool> label_set;
 	for (int i = 0; i < labels.size(); ++i) {
 		for (int j = 0; j < labels[i].size(); ++j) {
@@ -290,13 +290,60 @@ void outputFloorSegmentation(const cv::Mat& img, const vector<int>& y_split, con
 	cv::Mat result(img.rows, img.cols, CV_8UC3);
 	for (int i = 0; i < labels.size(); ++i) {
 		int y = y_split[y_split.size() - i - 2];
-		int h = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+		int h = y_split[y_split.size() - i - 1] - y;
 
 		for (int j = 0; j < labels[i].size(); ++j) {
 			int x = x_split[j];
-			int w = x_split[j + 1] - x_split[j];
+			int w = x_split[j + 1] - x;
 
 			cv::rectangle(result, cv::Rect(x, y, w, h), colors[labels[i][j]], -1);
+		}
+	}
+
+	cv::imwrite(filename.c_str(), result);
+}
+
+void outputReconstructedFacade(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<int>>& labels, const string& filename) {
+	map<int, vector<cv::Mat>> clustered_tiles;
+
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		int y = y_split[y_split.size() - i - 2];
+		int h = y_split[y_split.size() - i - 1] - y;
+
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			int x = x_split[j];
+			int w = x_split[j + 1] - x;
+
+			clustered_tiles[labels[i][j]].push_back(cv::Mat(img, cv::Rect(x, y, w, h)).clone());
+		}
+	}
+
+	map<int, cv::Mat> averaged_tiles;
+	for (auto it = clustered_tiles.begin(); it != clustered_tiles.end(); ++it) {
+		int w = it->second[0].cols;
+		int h = it->second[0].rows;
+		averaged_tiles[it->first] = cv::Mat(h, w, CV_32FC3, cv::Scalar(0.0f, 0.0f, 0.0f));
+		for (int k = 0; k < it->second.size(); ++k) {
+			cv::Mat tile;
+			cv::resize(it->second[k], tile, cv::Size(w, h));
+			tile.convertTo(tile, CV_32FC3);
+			averaged_tiles[it->first] += tile;
+		}
+		averaged_tiles[it->first] /= it->second.size();
+		cv::imwrite("test.png", averaged_tiles[it->first]);
+	}
+
+	cv::Mat result(img.rows, img.cols, CV_32FC3);
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		int y = y_split[y_split.size() - i - 2];
+		int h = y_split[y_split.size() - i - 1] - y;
+
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			int x = x_split[j];
+			int w = x_split[j + 1] - x;
+
+			cv::Mat tile(result, cv::Rect(x, y, w, h));
+			cv::resize(averaged_tiles[labels[i][j]], tile, cv::Size(w, h));			
 		}
 	}
 

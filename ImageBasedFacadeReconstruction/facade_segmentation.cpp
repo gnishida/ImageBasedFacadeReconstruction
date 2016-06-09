@@ -365,14 +365,15 @@ void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>&
 }
 
 /**
-* tileを分割し、分割方向、分割タイプ、ボーダーからの距離を返却する。
-* 分割しない場合はfalseを返却する。
-*
-* @param tile		タイル画像 (3-channel image)
-* @param min_size
-* @param horizontal_edge_max		水平分割線に対する、エッジの強さの最小値
-* @return				分割する場合はtrue / false otherwise
-*/
+ * tileを分割し、分割方向、分割タイプ、ボーダーからの距離を返却する。
+ * 分割しない場合はfalseを返却する。
+ *
+ * @param tile					タイル画像 (3-channel image)
+ * @param min_size
+ * @param horizontal_edge_max	水平分割線に対する、エッジの強さの最小値
+ * @param rect					
+ * @return						分割する場合はtrue / false otherwise
+ */
 bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int tile_margin, cv::Rect& rect) {
 	if (tile.cols < min_size || tile.rows < min_size) return false;
 
@@ -663,19 +664,18 @@ void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, 
 	}
 }
 
-void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
-	if (mat.cols == 1) {
-		for (int r = 0; r < mat.rows; ++r) {
-			if (cvutils::isLocalMinimum(mat, r, 1)) {
-				split_positions.push_back(r);
-			}
-		}
+/**
+ * 与えられた関数の極小値を使ってsplit lineを決定する。
+ */
+void getSplitLines(const cv::Mat_<float>& val, vector<float>& split_positions) {
+	cv::Mat_<float> mat = val.clone();
+	if (mat.rows == 1) {
+		mat = mat.t();
 	}
-	else if (mat.rows == 1) {
-		for (int c = 0; c < mat.cols; ++c) {
-			if (cvutils::isLocalMinimum(mat, c, 1)) {
-				split_positions.push_back(c);
-			}
+
+	for (int r = 0; r < mat.rows; ++r) {
+		if (cvutils::isLocalMinimum(mat, r, 1)) {
+			split_positions.push_back(r);
 		}
 	}
 
@@ -692,29 +692,17 @@ void getSplitLines(const cv::Mat_<float>& mat, vector<int>& split_positions) {
 		}
 	}
 
-	if (mat.cols == 1) {
-		if (split_positions.back() < mat.rows - 1) {
-			if (split_positions.back() >= mat.rows - 5) {
-				split_positions.back() = mat.rows - 1;
-			}
-			else {
-				split_positions.push_back(mat.rows - 1);
-			}
+	if (split_positions.back() < mat.rows) {
+		if (split_positions.back() >= mat.rows - 5) {
+			split_positions.back() = mat.rows;
 		}
-	}
-	else if (mat.rows == 1) {
-		if (split_positions.back() < mat.cols - 1) {
-			if (split_positions.back() >= mat.cols - 5) {
-				split_positions.back() = mat.cols - 1;
-			}
-			else {
-				split_positions.push_back(mat.cols - 1);
-			}
+		else {
+			split_positions.push_back(mat.rows);
 		}
 	}
 }
 
-void refineSplitLines(vector<int>& split_positions) {
+void refineSplitLines(vector<float>& split_positions) {
 	// 間隔が狭すぎる場合は、分割して隣接領域にマージする
 	while (true) {
 		// 領域の幅を計算する
@@ -748,7 +736,9 @@ void refineSplitLines(vector<int>& split_positions) {
 	}
 }
 
-void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>& window_rects) {
+void mergeEmptyRegion(vector<float>& y_split, vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, vector<vector<cv::Rect>>& refined_window_rects) {
+	refined_window_rects = window_rects;
+
 	// 各フロアの窓の数をカウントする
 	vector<int> win_per_row(y_split.size() - 1, 0);
 	int max_win_per_row = 0;
@@ -784,7 +774,7 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 			is_wall_row[i] = true;
 
 			for (int j = 0; j < x_split.size() - 1; ++j) {
-				window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
 			}
 		}
 	}
@@ -796,7 +786,89 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 			is_wall_col[j] = true;
 
 			for (int i = 0; i < y_split.size() - 1; ++i) {
-				window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+			}
+		}
+	}
+
+	// 窓のないフロアが連続している場合は、連結する
+	for (int i = 0; i < is_wall_row.size() - 1;) {
+		if (is_wall_row[i] && is_wall_row[i + 1]) {
+			is_wall_row.erase(is_wall_row.begin() + i + 1);
+			y_split.erase(y_split.begin() + i + 1);
+			refined_window_rects.erase(refined_window_rects.begin() + i + 1);
+		}
+		else {
+			i++;
+		}
+	}
+
+	// 窓のないカラムが連続している場合は、連結する
+	for (int j = 0; j < is_wall_col.size() - 1;) {
+		if (is_wall_col[j] && is_wall_col[j + 1]) {
+			is_wall_col.erase(is_wall_col.begin() + j + 1);
+			x_split.erase(x_split.begin() + j + 1);
+			for (int i = 0; i < y_split.size() - 1; ++i) {
+				refined_window_rects[i].erase(refined_window_rects[i].begin() + j + 1);
+			}
+		}
+		else {
+			j++;
+		}
+	}
+}
+
+void refine(vector<float>& y_split, vector<float>& x_split, const vector<vector<cv::Rect>>& window_rects, vector<vector<cv::Rect>>& refined_window_rects) {
+	refined_window_rects = window_rects;
+
+	// 各フロアの窓の数をカウントする
+	vector<int> win_per_row(y_split.size() - 1, 0);
+	int max_win_per_row = 0;
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		for (int j = 0; j < x_split.size() - 1; ++j) {
+			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
+				win_per_row[i]++;
+			}
+		}
+		if (win_per_row[i] > max_win_per_row) {
+			max_win_per_row = win_per_row[i];
+		}
+	}
+
+	// 各カラムの窓の数をカウントする
+	vector<int> win_per_col(x_split.size() - 1, 0);
+	int max_win_per_col = 0;
+	for (int j = 0; j < x_split.size() - 1; ++j) {
+		for (int i = 0; i < y_split.size() - 1; ++i) {
+			if (window_rects[i][j].width > 0 && window_rects[i][j].height > 0) {
+				win_per_col[j]++;
+			}
+		}
+		if (win_per_col[j] > max_win_per_col) {
+			max_win_per_col = win_per_col[j];
+		}
+	}
+
+	// 壁のフロアかどうかチェックする
+	vector<bool> is_wall_row(y_split.size() - 1, false);
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		if (win_per_row[i] < max_win_per_row * 0.2) {
+			is_wall_row[i] = true;
+
+			for (int j = 0; j < x_split.size() - 1; ++j) {
+				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
+			}
+		}
+	}
+
+	// 壁のカラムかどうかチェックする
+	vector<bool> is_wall_col(x_split.size() - 1, false);
+	for (int j = 0; j < x_split.size() - 1; ++j) {
+		if (win_per_col[j] < max_win_per_col * 0.2) {
+			is_wall_col[j] = true;
+
+			for (int i = 0; i < y_split.size() - 1; ++i) {
+				refined_window_rects[i][j] = cv::Rect(0, 0, 0, 0);
 			}
 		}
 	}
@@ -847,12 +919,12 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 				if (abs(window_rects[r][j].x + window_rects[r][j].width - 1 - x2) < 5) {
 					new_width = x2 - new_x;
 				}
-				window_rects[r][j].x = new_x;
-				window_rects[r][j].width = new_width;
+				refined_window_rects[r][j].x = new_x;
+				refined_window_rects[r][j].width = new_width;
 			}
 			else {
-				window_rects[r][j].x = x1;
-				window_rects[r][j].width = x2 - x1 + 1;
+				refined_window_rects[r][j].x = x1;
+				refined_window_rects[r][j].width = x2 - x1 + 1;
 			}
 		}
 	}
@@ -894,8 +966,8 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 		for (int c = 0; c < x_split.size() - 1; ++c) {
 			if (is_wall_col[c]) continue;
 
-			window_rects[i][c].y = y1;
-			window_rects[i][c].height = y2 - y1 + 1;
+			refined_window_rects[i][c].y = y1;
+			refined_window_rects[i][c].height = y2 - y1 + 1;
 		}
 	}
 
@@ -904,7 +976,7 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 		if (is_wall_row[i] && is_wall_row[i + 1]) {
 			is_wall_row.erase(is_wall_row.begin() + i + 1);
 			y_split.erase(y_split.begin() + i + 1);
-			window_rects.erase(window_rects.begin() + i + 1);
+			refined_window_rects.erase(refined_window_rects.begin() + i + 1);
 		}
 		else {
 			i++;
@@ -917,7 +989,7 @@ void refine(vector<int>& y_split, vector<int>& x_split, vector<vector<cv::Rect>>
 			is_wall_col.erase(is_wall_col.begin() + j + 1);
 			x_split.erase(x_split.begin() + j + 1);
 			for (int i = 0; i < y_split.size() - 1; ++i) {
-				window_rects[i].erase(window_rects[i].begin() + j + 1);
+				refined_window_rects[i].erase(refined_window_rects[i].begin() + j + 1);
 			}
 		}
 		else {

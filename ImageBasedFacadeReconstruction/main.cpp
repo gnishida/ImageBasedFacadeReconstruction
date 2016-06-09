@@ -20,6 +20,7 @@
 #include "CVUtilsTest.h"
 #include "visualization.h"
 #include "facade_segmentation.h"
+#include <list>
 
 #ifndef SQR
 #define	SQR(x)	((x) * (x))
@@ -27,7 +28,7 @@
 
 using namespace std;
 
-void clusterFloors(const cv::Mat& img, const vector<int>& y_split, int max_cluster, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
+void clusterFloors(const cv::Mat& img, const vector<float>& y_split, int max_cluster, vector<cv::Mat>& floors, vector<int>& labels, vector<cv::Mat>& centroids) {
 	floors.resize(y_split.size() - 1);
 	for (int i = 0; i < y_split.size() - 1; ++i) {
 		int height = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
@@ -188,6 +189,41 @@ vector<int> findBestFacadeGrammar(const vector<int>& labels) {
 	return refined_labels;
 }
 
+vector<float> estimateFacadeParams(const cv::Mat& img, const vector<float>& y_split, const vector<int>& labels) {
+	// key: label, value: (total size and count)
+	map<int, pair<float, int>> param_set;
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		float height = y_split[y_split.size() - i - 1] - y_split[y_split.size() - i - 2];
+	
+		if (param_set.find(labels[i]) == param_set.end()) {
+			param_set[labels[i]] = make_pair(0, 0);
+		}
+		param_set[labels[i]].first += height;
+		param_set[labels[i]].second++;
+	}
+
+	vector<float> params(param_set.size());
+	for (auto it = param_set.begin(); it != param_set.end(); ++it) {
+		// compute the average size by dividing the total size by the cound
+		params[it->first] = it->second.first / it->second.second;
+	}
+
+	// set the refined param values
+	vector<float> refined_y_split(y_split.size());
+	refined_y_split[0] = 0;
+	for (int i = 0; i < y_split.size() - 1; ++i) {
+		refined_y_split[i + 1] = refined_y_split[i] + params[labels[y_split.size() - i - 2]];
+	}
+
+	float ratio = (float)img.rows / refined_y_split.back();
+	for (int i = 0; i < refined_y_split.size() - 1; ++i) {
+		refined_y_split[i] *= ratio;
+	}
+	refined_y_split.back() = img.rows;
+
+	return refined_y_split;
+}
+
 vector<int> findBestFloorGrammar(const vector<int>& labels) {
 	int N = labels.size();
 
@@ -271,7 +307,132 @@ vector<int> findBestFloorGrammar(const vector<int>& labels) {
 	return refined_labels;
 }
 
-void clusterTiles(const cv::Mat& img, const vector<int>& x_split, int max_cluster, vector<cv::Mat>& tiles, vector<int>& labels, vector<cv::Mat>& centroids) {
+vector<float> estimateColumnParams(const cv::Mat& img, const vector<float>& x_split, const vector<int>& labels) {
+	// key: label, value: (total size and count)
+	map<int, pair<float, int>> param_set;
+	for (int i = 0; i < x_split.size() - 1; ++i) {
+		float width = x_split[i + 1] - x_split[i];
+
+		if (param_set.find(labels[i]) == param_set.end()) {
+			param_set[labels[i]] = make_pair(0, 0);
+		}
+		param_set[labels[i]].first += width;
+		param_set[labels[i]].second++;
+	}
+
+	vector<float> params(param_set.size());
+	for (auto it = param_set.begin(); it != param_set.end(); ++it) {
+		// compute the average size by dividing the total size by the cound
+		params[it->first] = it->second.first / it->second.second;
+	}
+
+	// set the refined param values
+	vector<float> refined_x_split(x_split.size());
+	refined_x_split[0] = 0;
+	for (int i = 0; i < x_split.size() - 1; ++i) {
+		refined_x_split[i + 1] = refined_x_split[i] + params[labels[i]];
+	}
+
+	float ratio = (float)img.cols / refined_x_split.back();
+	for (int i = 0; i < refined_x_split.size() - 1; ++i) {
+		refined_x_split[i] *= ratio;
+	}
+	refined_x_split.back() = img.cols;
+
+	return refined_x_split;
+}
+
+vector<float> estimateFloorParams(const cv::Mat& img, const vector<float>& y_split, const vector<float>& x_split, const vector<vector<int>>& labels) {
+	// カラムをグループ分けする
+	map<int, int> column_group;
+	for (int group_id = 0;; ++group_id) {
+		list<pair<int, int>> queue;
+
+		bool new_group = false;
+		for (int j = 0; j < labels[0].size(); ++j) {
+			if (column_group.find(j) == column_group.end()) {
+				new_group = true;
+				column_group[j] = group_id;
+				for (int i = 0; i < labels.size(); ++i) {
+					queue.push_back(make_pair(i, j));
+				}
+				break;
+			}
+		}
+
+		// 全てのカラムがグループ分けされたら、終了
+		if (!new_group) break;
+
+		while (!queue.empty()) {
+			pair<int, int> cur = queue.front();
+			queue.pop_front();
+			int cur_y = cur.first;
+			int cur_x = cur.second;
+			int label = labels[cur_y][cur_x];
+
+			for (int j = 0; j < labels[cur_y].size(); ++j) {
+				if (j == cur_x) continue;
+
+				if (labels[cur_y][j] == label) {
+					if (column_group.find(j) == column_group.end()) {
+						column_group[j] = group_id;
+						for (int i = 0; i < labels.size(); ++i) {
+							if (i == cur_y) continue;
+							queue.push_back(make_pair(i, j));
+						}
+					}
+				}
+			}
+
+
+		}
+	}
+
+	map<int, pair<float, int>> param_set;
+	for (int i = 0; i < x_split.size() - 1; ++i) {
+		int width = x_split[i + 1] - x_split[i];
+
+		if (param_set.find(column_group[i]) == param_set.end()) {
+			param_set[column_group[i]] = make_pair(0, 0);
+		}
+		param_set[column_group[i]].first += width;
+		param_set[column_group[i]].second++;
+	}
+
+	vector<float> params(param_set.size());
+	for (auto it = param_set.begin(); it != param_set.end(); ++it) {
+		// compute the average size by dividing the total size by the cound
+		params[it->first] = it->second.first / it->second.second;
+	}
+
+	// set the refined param values
+	vector<float> refined_x_split(x_split.size());
+	refined_x_split[0] = 0;
+	for (int i = 0; i < x_split.size() - 1; ++i) {
+		refined_x_split[i + 1] = refined_x_split[i] + params[column_group[i]];
+	}
+
+	float ratio = (float)refined_x_split.back() / img.cols;
+
+	for (int i = 0; i < refined_x_split.size() - 1; ++i) {
+		refined_x_split[i] *= ratio;
+	}
+	refined_x_split.back() = img.cols;
+
+	return refined_x_split;
+}
+
+void clusterColumns(const cv::Mat& img, const vector<float>& x_split, int max_cluster, vector<cv::Mat>& columns, vector<int>& labels, vector<cv::Mat>& centroids) {
+	columns.resize(x_split.size() - 1);
+	for (int i = 0; i < x_split.size() - 1; ++i) {
+		int width = x_split[i + 1] - x_split[i];
+		columns[i] = cv::Mat(img, cv::Rect(x_split[i], 0, width, img.rows));
+	}
+
+	cvutils::clusterImages(columns, labels, centroids, max_cluster);
+}
+
+void clusterTiles(const cv::Mat& img, const vector<float>& x_split, int max_cluster, vector<cv::Mat>& tiles, vector<int>& labels, vector<cv::Mat>& centroids) {
 	tiles.resize(x_split.size() - 1);
 	for (int i = 0; i < x_split.size() - 1; ++i) {
 		int width = x_split[i + 1] - x_split[i];
@@ -279,13 +440,6 @@ void clusterTiles(const cv::Mat& img, const vector<int>& x_split, int max_cluste
 	}
 
 	cvutils::clusterImages(tiles, labels, centroids, max_cluster);
-
-	/*
-	cout << "Floor segmentation:" << endl;
-	for (int i = 0; i < labels.size(); ++i) {
-		cout << "class: " << labels[i] << endl;
-	}
-	*/
 }
 
 void subdivideFacade(const cv::Mat& img) {
@@ -355,11 +509,11 @@ void subdivideFacade(const cv::Mat& img) {
 	time_t start = clock();
 
 	// Facadeのsplit linesを求める
-	vector<int> y_split;
+	vector<float> y_split;
 	//findBestHorizontalSplitLines(img, Ver, floor_height * 0.85, floor_height * 1.85, y_split);
 	getSplitLines(Ver, y_split);
 	refineSplitLines(y_split);
-	vector<int> x_split;
+	vector<float> x_split;
 	//findBestVerticalSplitLines(img, Hor, tile_width * 0.4, tile_width * 1.85, x_split);
 	getSplitLines(Hor, x_split);
 	refineSplitLines(x_split);
@@ -416,8 +570,9 @@ void subdivideFacade(const cv::Mat& img) {
 	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows.png");
 
 	// 窓の位置をalignする
-	refine(y_split, x_split, window_rects);
-	outputFacadeAndWindows(img, y_split, x_split, window_rects, "facade_windows_refined.png");
+	vector<vector<cv::Rect>> refined_window_rects;
+	refine(y_split, x_split, window_rects, refined_window_rects);
+	outputFacadeAndWindows(img, y_split, x_split, refined_window_rects, "facade_windows_refined.png");
 
 	// 各floorのsimilarityを計算する
 	vector<cv::Mat> floors;
@@ -428,6 +583,7 @@ void subdivideFacade(const cv::Mat& img) {
 
 	// 最も類似するfacade grammarを探す
 	floor_labels = findBestFacadeGrammar(floor_labels);
+	y_split = estimateFacadeParams(img, y_split, floor_labels);
 	outputFacadeSegmentation(img, y_split, floor_labels, "facade_labeled_refined.png");
 
 	// 各tileのsimilarityを計算する
@@ -453,39 +609,45 @@ void subdivideFacade(const cv::Mat& img) {
 				}
 			}
 
-			label_offset += tile_centroids.size();
+			label_offset += (*max_element(tile_labels.begin(), tile_labels.end())) + 1;
 		}
 		outputFloorSegmentation(img, y_split, x_split, all_labels, "floor_labeled.png");
 	}
 
 	// 各種のfloorについて、最も類似するfloor grammarを探す
 	{
+		vector<cv::Mat> columns;
+		vector<cv::Mat> column_centroids;
+		vector<int> column_labels;
+		clusterColumns(img, x_split, 4, columns, column_labels, column_centroids);
+
+		column_labels = findBestFloorGrammar(column_labels);
+
 		vector<vector<int>> all_labels(floor_labels.size());
 		for (int i = 0; i < all_labels.size(); ++i) {
 			all_labels[i].resize(x_split.size() - 1);
 		}
 
-		vector<cv::Mat> tiles;
-		vector<cv::Mat> tile_centroids;
-		vector<int> tile_labels;
 		int label_offset = 0;
 		for (int i = 0; i < floor_centroids.size(); ++i) {
-			clusterTiles(floor_centroids[i], x_split, 4, tiles, tile_labels, tile_centroids);
-
-			tile_labels = findBestFloorGrammar(tile_labels);
-
 			// このクラスタに属する全てのフロアに、計算されたlabelをコピーする
 			for (int k = 0; k < all_labels.size(); ++k) {
 				if (floor_labels[k] != i) continue;
 
-				for (int l = 0; l < tile_labels.size(); ++l) {
-					all_labels[k][l] = tile_labels[l] + label_offset;
+				for (int l = 0; l < column_labels.size(); ++l) {
+					all_labels[k][l] = column_labels[l] + label_offset;
 				}
 			}
 
-			label_offset += tile_centroids.size();
+			label_offset += (*max_element(column_labels.begin(), column_labels.end())) + 1;
 		}
+
+		x_split = estimateColumnParams(img, x_split, column_labels);
 		outputFloorSegmentation(img, y_split, x_split, all_labels, "floor_labeled_refined.png");
+
+		mergeEmptyRegion(y_split, x_split, refined_window_rects);
+
+		outputReconstructedFacade(img, y_split, x_split, all_labels, "facade_reconstructed.png");
 	}
 }
 
