@@ -524,6 +524,9 @@ void subdivideFacade(const cv::Mat& img) {
 	cv::Mat detected_edges;
 	cv::Canny(img, detected_edges, 30, 100, 3);
 	cv::imwrite("detected_edges.png", detected_edges);
+	cv::Mat detected_edges_inverted;
+	cv::bitwise_not(detected_edges, detected_edges_inverted);
+	cv::imwrite("detected_edges_inverted.png", detected_edges_inverted);
 
 	// facadeの端のエッジを削除する
 	int margin = 8;
@@ -656,7 +659,7 @@ int main() {
 	cvutils::test_cvutils();
 
 	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade1.png");
+	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade4.png");
 
 	subdivideFacade(img);
 
