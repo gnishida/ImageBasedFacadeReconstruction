@@ -50,4 +50,5 @@ namespace utils {
 
 		return min_mapping;
 	}
+
 }

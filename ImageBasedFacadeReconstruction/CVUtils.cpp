@@ -175,6 +175,50 @@ namespace cvutils {
 		}
 	}
 
+	void grayScale(const cv::Mat& img, cv::Mat& grayImg) {
+		if (img.channels() == 1) {
+			grayImg = img.clone();
+		}
+		else if (img.channels() == 3) {
+			cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
+		}
+		else if (img.channels() == 4) {
+			cv::cvtColor(img, grayImg, cv::COLOR_BGRA2GRAY);
+		}
+	}
+
+	void blend(cv::Mat foreground, cv::Mat background, cv::Mat& blended) {
+		// if there is no alpha channel in the foregound, copy the foreground to the result.
+		if (foreground.channels() < 4) {
+			blended = foreground.clone();
+			return;
+		}
+
+		// convert the background to 3-channel image
+		if (background.channels() == 1) {
+			cv::cvtColor(background, background, cv::COLOR_GRAY2BGR);
+		}
+		else if (background.channels() == 4) {
+			cv::cvtColor(background, background, cv::COLOR_BGRA2BGR);
+		}
+
+		blended = background.clone();
+
+		for (int r = 0; r < blended.rows; ++r) {
+			for (int c = 0; c < blended.cols; ++c) {
+				cv::Vec3b c1 = background.at<cv::Vec3b>(r, c);
+				cv::Vec4b c2 = foreground.at<cv::Vec4b>(r, c);
+					
+				float alpha = (float)c2[3] / 255;
+				for (int k = 0; k < 3; ++k) {
+					c1[k] = c1[k] * (1 - alpha) + c2[k] * alpha;
+				}
+
+				blended.at<cv::Vec3b>(r, c) = c1;
+			}
+		}
+	}
+
 	bool isLocalMinimum(const cv::Mat& mat, int index, int num) {
 		bool localMinimum = true;
 

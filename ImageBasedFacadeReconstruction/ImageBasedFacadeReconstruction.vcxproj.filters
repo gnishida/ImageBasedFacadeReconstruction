@@ -27,13 +27,10 @@
     <ClCompile Include="CVUtilsTest.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="visualization.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="CVUtilsTest.h">
       <Filter>Header Files</Filter>
     </ClCompile>
-    <ClCompile Include="facade_segmentation.cpp">
+    <ClCompile Include="FacadeSegmentation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -44,13 +41,7 @@
     <ClInclude Include="Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="visualization.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="facade_segmentation.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="ibfr.h">
+    <ClInclude Include="FacadeSegmentation.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
