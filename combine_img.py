@@ -38,15 +38,27 @@ def main(directory_path, output_file, rows, height_of_row, margin):
 
 	# compute the size of the combined image
 	total_width = sum(widths) + margin
-	line_width = int(total_width / rows + 0.5)
+	image_width = int(total_width / rows + 0.5)
+	
+	# check the image width
+	while True:
+		x_offset = margin
+		row = 0
+		for i in xrange(len(images)):
+			if x_offset + images[i].size[0] > image_width:
+				x_offset = margin
+				row = row + 1
+			x_offset += images[i].size[0] + margin
+		if row < rows: break
+		image_width = image_width + int(images[0].size[0] * 0.5)
 	
 	# create the combined image
-	combined_img = Image.new('RGBA', (line_width, height_of_row * rows + margin * (rows + 1)), "white")
+	combined_img = Image.new('RGBA', (image_width, height_of_row * rows + margin * (rows + 1)), "white")
 
 	x_offset = margin
 	y_offset = margin
 	for im in images:
-		if x_offset + im.size[0] > line_width:
+		if x_offset + im.size[0] > image_width:
 			x_offset = margin
 			y_offset += height_of_row + margin
 		
