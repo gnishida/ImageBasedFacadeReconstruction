@@ -6,44 +6,20 @@
 namespace fs {
 
 	void subdivideFacade(const cv::Mat& img, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects) {
-		// convert the image to grayscale
-		cv::Mat grayImg;
-		cvutils::grayScale(img, grayImg);
-
-		// vertical split
-		cv::Mat_<float> SV_max;
-		cv::Mat_<float> h_max;
-		computeSV(grayImg, SV_max, h_max, std::make_pair(10, 40));
-
-		// estimate the floor height
-		float floor_height = cvutils::getMostPopularValue(h_max, 3, 3);
-
-		// horizontal split
-		cv::Mat_<float> SH_max;
-		cv::Mat_<float> w_max;
-		computeSH(grayImg, SH_max, w_max, std::make_pair(10, 40));
-
-		float tile_width = cvutils::getMostPopularValue(w_max, 3, 3);
-
 		// compute Ver(y) and Hor(x)
 		cv::Mat_<float> Ver;
 		cv::Mat_<float> Hor;
-		computeVerAndHor(img, Ver, Hor, floor_height * 0.1);
+		//computeVerAndHor(img, Ver, Hor);
+		computeVerAndHor2(img, Ver, Hor);
 
 		// Facadeのsplit linesを求める
-		getSplitLines(Ver, y_split);
-		refineSplitLines(y_split);
-		getSplitLines(Hor, x_split);
-		refineSplitLines(x_split);
+		getSplitLines2(Ver, 4, y_split);
+		getSplitLines2(Hor, 4, x_split);
 
 		// detect edges
 		cv::Mat edge_img;
-		cv::Canny(img, edge_img, 30, 100, 3);
-		/*cv::imwrite("detected_edges.png", detected_edges);
-		cv::Mat detected_edges_inverted;
-		cv::bitwise_not(detected_edges, detected_edges_inverted);
-		cv::imwrite("detected_edges_inverted.png", detected_edges_inverted);
-		*/
+		//cv::Canny(img, edge_img, 30, 100, 3);
+		cv::Canny(img, edge_img, 50, 120, 3);
 
 		// facadeの端のエッジを削除する
 		int margin = 4;
@@ -103,6 +79,7 @@ namespace fs {
 		SV_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 		h_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 
+		/*
 		std::ifstream in_SV_max("SV_max.txt");
 		std::ifstream in_h("h_max.txt");
 		if (in_SV_max.good() && in_h.good()) {
@@ -112,6 +89,7 @@ namespace fs {
 			h_max = cvutils::read("h_max.txt");
 		}
 		else {
+		*/
 			printf("computing");
 			for (int r = 0; r < img.rows; ++r) {
 				printf("\rcomputing r = %d/%d  ", r, img.rows);
@@ -133,10 +111,12 @@ namespace fs {
 			}
 			printf("\n");
 
+		/*
 			// output SV_max(x) and h_max(x)
 			cvutils::write("SV_max.txt", SV_max);
 			cvutils::write("h_max.txt", h_max);
 		}
+		*/
 	}
 
 	/**
@@ -151,6 +131,7 @@ namespace fs {
 		SH_max = cv::Mat_<float>(1, img.cols, 0.0f);
 		w_max = cv::Mat_<float>(1, img.cols, 0.0f);
 
+		/*
 		std::ifstream in_SH("SH_max.txt");
 		std::ifstream in_w("w_max.txt");
 		if (in_SH.good() && in_w.good()) {
@@ -160,6 +141,7 @@ namespace fs {
 			w_max = cvutils::read("w_max.txt");
 		}
 		else {
+		*/
 			printf("computing");
 			for (int c = 0; c < img.cols; ++c) {
 				printf("\rcomputing c = %d/%d  ", c, img.cols);
@@ -182,10 +164,43 @@ namespace fs {
 			}
 			printf("\n");
 
+		/*
 			// output SH_max(x) and w_max(x)
 			cvutils::write("SH_max.txt", SH_max);
 			cvutils::write("w_max.txt", w_max);
 		}
+		*/
+	}
+
+	/**
+	* imgから、Ver(y)とHor(x)を計算する。
+	*
+	* @param img		image (3-channel color image)
+	* @param Ver		Ver(y)
+	* @param Hor		Hor(x)
+	*/
+	void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>& Hor) {
+		// convert the image to grayscale
+		cv::Mat grayImg;
+		cvutils::grayScale(img, grayImg);
+
+		// vertical split
+		cv::Mat_<float> SV_max;
+		cv::Mat_<float> h_max;
+		computeSV(grayImg, SV_max, h_max, std::make_pair(10, 40));
+
+		// estimate the floor height
+		float floor_height = cvutils::getMostPopularValue(h_max, 3, 3);
+
+		// horizontal split
+		cv::Mat_<float> SH_max;
+		cv::Mat_<float> w_max;
+		computeSH(grayImg, SH_max, w_max, std::make_pair(10, 40));
+
+		float tile_width = cvutils::getMostPopularValue(w_max, 3, 3);
+
+		// compute Ver(y) and Hor(x)
+		computeVerAndHor(img, Ver, Hor, floor_height * 0.1);
 	}
 
 	/**
@@ -260,6 +275,29 @@ namespace fs {
 				Hor(0, c) += (hor_ytotal.at<float>(0, cc) - beta * ver_ytotal.at<float>(0, cc)) * utils::gause(cc - c, sigma);
 			}
 		}
+	}
+
+	/**
+	 * 俺の方式。
+	 */
+	void computeVerAndHor2(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>& Hor) {
+		// compute gradient magnitude
+		cv::Mat grayImg;
+		cvutils::grayScale(img, grayImg);
+		cv::Mat sobelx;
+		cv::Sobel(grayImg, sobelx, CV_32F, 1, 0);
+		sobelx = cv::abs(sobelx);
+		cv::Mat sobely;
+		cv::Sobel(grayImg, sobely, CV_32F, 0, 1);
+		sobely = cv::abs(sobely);
+
+		// sum up the gradient magnitude horizontally and vertically
+		cv::reduce(sobely, Hor, 0, CV_REDUCE_SUM);
+		cv::reduce(sobelx, Ver, 1, CV_REDUCE_SUM);
+
+		// smoothing
+		cv::blur(Ver, Ver, cv::Size(11, 11));
+		cv::blur(Hor, Hor, cv::Size(11, 11));
 	}
 
 	/**
@@ -556,14 +594,14 @@ namespace fs {
 	/**
 	 * 与えられた関数の極小値を使ってsplit lineを決定する。
 	 */
-	void getSplitLines(const cv::Mat_<float>& val, std::vector<float>& split_positions) {
+	void getSplitLines(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
 		cv::Mat_<float> mat = val.clone();
 		if (mat.rows == 1) {
 			mat = mat.t();
 		}
 
 		for (int r = 0; r < mat.rows; ++r) {
-			if (cvutils::isLocalMinimum(mat, r, 1)) {
+			if (cvutils::isLocalMinimum(mat, r, size)) {
 				split_positions.push_back(r);
 			}
 		}
@@ -589,6 +627,73 @@ namespace fs {
 				split_positions.push_back(mat.rows);
 			}
 		}
+	}
+
+	/**
+	* 与えられた関数の極小値を使ってsplit lineを決定する。
+	*/
+	void getSplitLines2(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
+		cv::Mat_<float> mat = val.clone();
+		if (mat.rows == 1) {
+			mat = mat.t();
+		}
+
+		for (int r = 0; r < mat.rows; ++r) {
+			if (cvutils::isLocalMinimum(mat, r, size)) {
+				split_positions.push_back(r);
+			}
+		}
+
+		// 両端処理
+		if (split_positions.size() == 0) {
+			split_positions.insert(split_positions.begin(), 0);
+		}
+		else if (split_positions[0] > 0) {
+			if (split_positions[0] < 5) {
+				split_positions[0] = 0;
+			}
+			else {
+				split_positions.insert(split_positions.begin(), 0);
+			}
+		}
+
+		if (split_positions.back() < mat.rows) {
+			if (split_positions.back() >= mat.rows - 5) {
+				split_positions.back() = mat.rows;
+			}
+			else {
+				split_positions.push_back(mat.rows);
+			}
+		}
+
+		////////////////////////////////////////////////////////////
+		// 一旦、極小値を取得した後、隣接する極大値との差のmedianを計算し、
+		// medianより極端に小さい場合は、その極小値を削除する。
+		std::vector<float> tmp_positions = split_positions;
+		split_positions.clear();
+		std::vector<float> diffs;
+		for (int i = 1; i < tmp_positions.size() - 1; ++i) {
+			float diff = cvutils::findNextMax(mat, tmp_positions[i]) - mat.at<float>(tmp_positions[i], 0);
+			diffs.push_back(diff);
+		}
+
+		float diff_median = utils::median(diffs);
+
+		for (int i = 0; i < tmp_positions.size(); ++i) {
+			if (i == 0) {
+				split_positions.push_back(tmp_positions[i]);
+			}
+			else if (i == tmp_positions.size() - 1) {
+				split_positions.push_back(tmp_positions[i]);
+			}
+			else {
+				if (diffs[i - 1] >= diff_median * 0.5) {
+					split_positions.push_back(tmp_positions[i]);
+				}
+			}
+		}
+
+		refineSplitLines(split_positions);
 	}
 
 	void refineSplitLines(std::vector<float>& split_positions) {
@@ -1157,6 +1262,52 @@ namespace fs {
 				}
 			}
 		}
+		cv::imwrite(filename, result);
+	}
+
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const std::vector<float>& ys, const cv::Mat& hor, const std::vector<float>& xs, const std::string& filename, int lineWidth) {
+		int graphSize = std::max(10.0, std::max(img.rows, img.cols) * 0.3);
+
+		cv::Mat result;
+		cv::Scalar graph_color;
+		cv::Scalar peak_color;
+
+		result = cv::Mat(img.rows + graphSize + 3, img.cols + graphSize + 3, img.type(), cv::Scalar(255, 255, 255));
+		graph_color = cv::Scalar(0, 0, 0);
+		peak_color = cv::Scalar(0, 0, 255);
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// get the maximum value of Ver(y) and Hor(x)
+		float max_ver = cvutils::max(ver);
+		float min_ver = cvutils::min(ver);
+		float max_hor = cvutils::max(hor);
+		float min_hor = cvutils::min(hor);
+
+		// draw vertical graph
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + (cvutils::get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + (cvutils::get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
+		}
+		for (int i = 0; i < ys.size(); ++i) {
+			cv::line(result, cv::Point(0, ys[i]), cv::Point(img.cols - 1, ys[i]), peak_color, lineWidth);
+		}
+
+		// draw horizontal graph
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + (cvutils::get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (cvutils::get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
+		}
+		for (int i = 0; i < xs.size(); ++i) {
+			cv::line(result, cv::Point(xs[i], 0), cv::Point(xs[i], img.rows - 1), peak_color, lineWidth);
+		}
+
 		cv::imwrite(filename, result);
 	}
 

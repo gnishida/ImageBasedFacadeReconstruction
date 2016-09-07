@@ -219,6 +219,68 @@ namespace cvutils {
 		}
 	}
 
+	void grad(cv::Mat img, cv::Mat& grad) {
+		cv::Mat grayImg;
+		grayScale(img, grayImg);
+
+		cv::Mat sobelx;
+		cv::Mat sobely;
+		cv::Sobel(grayImg, sobelx, CV_32F, 1, 0);
+		cv::Sobel(grayImg, sobely, CV_32F, 0, 1);
+
+		grad = cv::Mat(grayImg.size(), CV_32F);
+		for (int r = 0; r < grayImg.rows; ++r) {
+			for (int c = 0; c < grayImg.cols; ++c) {
+				grad.at<float>(r, c) = std::hypot(sobelx.at<float>(r, c), sobely.at<float>(r, c));
+			}
+		}
+	}
+
+	void median(cv::Mat img, int x, int y, cv::Mat& med) {
+		if (x == 1 && y == 0) {
+			med = cv::Mat(img.rows, 1, CV_32F);
+			for (int r = 0; r < img.rows; ++r) {
+				std::map<double, int> hist;
+				for (int c = 0; c < img.cols; ++c) {
+					double val = get(img, r, c);
+					if (hist.find(val) == hist.end()) {
+						hist[val] = 0;
+					}
+					hist[val]++;
+				}
+				
+				int cnt = 0;
+				for (auto it = hist.begin(); it != hist.end(); ++it, ++cnt) {
+					if (cnt >= img.cols / 2) {
+						med.at<float>(r, 0) = it->first;
+						break;
+					}
+				}
+			}
+		}
+		else {
+			med = cv::Mat(1, img.cols, CV_32F);
+			for (int c = 0; c < img.cols; ++c) {
+				std::map<double, int> hist;
+				for (int r = 0; r < img.rows; ++r) {
+					double val = get(img, r, c);
+					if (hist.find(val) == hist.end()) {
+						hist[val] = 0;
+					}
+					hist[val]++;
+				}
+
+				int cnt = 0;
+				for (auto it = hist.begin(); it != hist.end(); ++it, ++cnt) {
+					if (cnt >= img.rows / 2) {
+						med.at<float>(0, c) = it->first;
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	bool isLocalMinimum(const cv::Mat& mat, int index, int num) {
 		bool localMinimum = true;
 
@@ -226,25 +288,14 @@ namespace cvutils {
 			if (index == 0) {
 				localMinimum = false;
 			}
+			else if (index == mat.cols - 1) {
+				localMinimum = false;
+			}
 			else {
-				for (int c = index; c > std::max(0, index - num); --c) {
-					if (get(mat, 0, c) >= get(mat, 0, c - 1)) {
+				for (int c = std::max(0, index - num); c < std::min(mat.cols - 1, index + num); ++c) {
+					if (get(mat, 0, c) < get(mat, 0, index)) {
 						localMinimum = false;
 						break;
-					}
-				}
-			}
-
-			if (localMinimum) {
-				if (index == mat.cols - 1) {
-					localMinimum = false;
-				}
-				else {
-					for (int c = index; c < std::min(mat.cols - 1, index + num); ++c) {
-						if (get(mat, 0, c) >= get(mat, 0, c + 1)) {
-							localMinimum = false;
-							break;
-						}
 					}
 				}
 			}
@@ -253,25 +304,14 @@ namespace cvutils {
 			if (index == 0) {
 				localMinimum = false;
 			}
+			else if (index == mat.rows - 1) {
+				localMinimum = false;
+			}
 			else {
-				for (int r = index; r > std::max(0, index - num); --r) {
-					if (get(mat, r, 0) >= get(mat, r - 1, 0)) {
+				for (int r = std::max(0, index - num); r < std::min(mat.rows - 1, index + num); ++r) {
+					if (get(mat, r, 0) < get(mat, index, 0)) {
 						localMinimum = false;
 						break;
-					}
-				}
-			}
-
-			if (localMinimum) {
-				if (index == mat.rows - 1) {
-					localMinimum = false;
-				}
-				else {
-					for (int r = index; r < std::min(mat.rows - 1, index + num); ++r) {
-						if (get(mat, r, 0) >= get(mat, r + 1, 0)) {
-							localMinimum = false;
-							break;
-						}
 					}
 				}
 			}
@@ -288,8 +328,8 @@ namespace cvutils {
 				localMaximum = false;
 			}
 			else {
-				for (int c = index; c > std::max(0, index - num); --c) {
-					if (get(mat, 0, c) <= get(mat, 0, c - 1)) {
+				for (int c = index - 1; c >= std::max(0, index - num); --c) {
+					if (get(mat, 0, c) > get(mat, 0, index)) {
 						localMaximum = false;
 						break;
 					}
@@ -301,8 +341,8 @@ namespace cvutils {
 					localMaximum = false;
 				}
 				else {
-					for (int c = index; c < std::min(mat.cols - 1, index + num); ++c) {
-						if (get(mat, 0, c) <= get(mat, 0, c + 1)) {
+					for (int c = index + 1; c <= std::min(mat.cols - 1, index + num); ++c) {
+						if (get(mat, 0, c) > get(mat, 0, index)) {
 							localMaximum = false;
 							break;
 						}
@@ -315,8 +355,8 @@ namespace cvutils {
 				localMaximum = false;
 			}
 			else {
-				for (int r = index; r > std::max(0, index - num); --r) {
-					if (get(mat, r, 0) <= get(mat, r - 1, 0)) {
+				for (int r = index - 1; r >= std::max(0, index - num); --r) {
+					if (get(mat, r, 0) > get(mat, index, 0)) {
 						localMaximum = false;
 						break;
 					}
@@ -328,8 +368,8 @@ namespace cvutils {
 					localMaximum = false;
 				}
 				else {
-					for (int r = index; r < std::min(mat.rows - 1, index + num); ++r) {
-						if (get(mat, r, 0) <= get(mat, r + 1, 0)) {
+					for (int r = index + 1; r <= std::min(mat.rows - 1, index + num); ++r) {
+						if (get(mat, r, 0) > get(mat, index, 0)) {
 							localMaximum = false;
 							break;
 						}
@@ -424,6 +464,40 @@ namespace cvutils {
 		}
 
 		return max_index;
+	}
+
+	/**
+	 * 指定されたindexから周辺の値を調べ、極大値を返却する。
+	 */
+	float findNextMax(cv::Mat mat, int index) {
+		if (mat.rows == 1) {
+			mat = mat.t();
+		}
+
+		float val = mat.at<float>(index, 0);
+		for (int r = index - 1; r >= 0; --r) {
+			if (mat.at<float>(r, 0) > val) {
+				val = mat.at<float>(r, 0);
+			}
+			else {
+				break;
+			}
+		}
+		float max_val = val;
+
+		val = mat.at<float>(index, 0);
+		for (int r = index + 1; r < mat.rows; ++r) {
+			if (mat.at<float>(r, 0) > val) {
+				val = mat.at<float>(r, 0);
+			}
+			else {
+				break;
+			}
+		}
+
+		if (val > max_val) max_val = val;
+
+		return max_val;
 	}
 
 	/**
@@ -572,7 +646,6 @@ namespace cvutils {
 		float min_hor = cvutils::min(hor);
 
 		// draw vertical graph
-		cv::Mat blured_ver;
 		for (int r = 0; r < img.rows - 1; ++r) {
 			int x1 = img.cols + (get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
 			int x2 = img.cols + (get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
@@ -592,7 +665,6 @@ namespace cvutils {
 		}
 
 		// draw horizontal graph
-		cv::Mat blured_hor;
 		for (int c = 0; c < img.cols - 1; ++c) {
 			int y1 = img.rows + (get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
 			int y2 = img.rows + (get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;

@@ -18,10 +18,13 @@ namespace cvutils {
 	double get(const cv::Mat& mat, int r, int c);
 	void grayScale(const cv::Mat& img, cv::Mat& grayImg);
 	void blend(cv::Mat foreground, cv::Mat background, cv::Mat& blended);
+	void grad(cv::Mat img, cv::Mat& grad);
+	void median(cv::Mat img, int x, int y, cv::Mat& med);
 	bool isLocalMinimum(const cv::Mat& mat, int index, int num);
 	bool isLocalMaximum(const cv::Mat& mat, int index, int num);
 	std::vector<int> getPeak(const cv::Mat& mat, bool smooth, int sigma, int flag = 1, int width = 1);
 	float getMostPopularValue(const cv::Mat& h_max, float sigma, float min_value);
+	float findNextMax(cv::Mat mat, int index);
 	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);

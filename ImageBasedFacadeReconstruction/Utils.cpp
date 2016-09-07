@@ -9,6 +9,17 @@ namespace utils {
 		return 1.0f / 2.0f / M_PI / sigma / sigma * expf(-u * u / 2.0f / sigma / sigma);
 	}
 
+	float median(std::vector<float> list) {
+		size_t size = list.size();
+		std::sort(list.begin(), list.end());
+		if (size % 2 == 0) {
+			return (list[size / 2 - 1] + list[size / 2]) / 2;
+		}
+		else {
+			return list[list.size() / 2];
+		}
+	}
+
 	/**
 	 * ２つの数列がベストマッチするよう、２つ目の数列を変換する。
 	 *
