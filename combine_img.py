@@ -8,17 +8,20 @@ Example:
        python combine_img.py results --output combined.png --rows 3 --height 256 --margin 30
 
 
+Updates:
+9/7/2016 - To show numbers, add "--number" option
+
 Author: Gen Nishida
 Date: 9/1/2016
 '''
 
 import sys
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from os import listdir
 from os.path import isfile, join
 import argparse
 
-def main(directory_path, output_file, rows, height_of_row, margin):
+def main(directory_path, output_file, rows, height_of_row, margin, number):
 	# read all the image files in the directory
 	images = []
 	widths = []
@@ -52,18 +55,41 @@ def main(directory_path, output_file, rows, height_of_row, margin):
 		if row < rows: break
 		image_width = image_width + int(images[0].size[0] * 0.5)
 	
-	# create the combined image
-	combined_img = Image.new('RGBA', (image_width, height_of_row * rows + margin * (rows + 1)), "white")
+	text_height = int(height_of_row * 0.15)
 
+	# create the combined image
+	if number:
+		combined_img = Image.new('RGBA', (image_width, height_of_row * rows + margin * (rows + 1) + text_height * rows), "white")
+	else:
+		combined_img = Image.new('RGBA', (image_width, height_of_row * rows + margin * (rows + 1)), "white")
+
+	# set font size
+	fontsize = 1
+	font = ImageFont.truetype("arial.ttf", fontsize)
+	while font.getsize("1")[0] < text_height * 0.5:
+	    # iterate until the text size is just larger than the criteria
+	    fontsize += 1
+	    font = ImageFont.truetype("arial.ttf", fontsize)
+	fontsize -= 1
+	font = ImageFont.truetype("arial.ttf", fontsize)
+
+	# combine images
+	draw = ImageDraw.Draw(combined_img)
 	x_offset = margin
 	y_offset = margin
-	for im in images:
-		if x_offset + im.size[0] > image_width:
+	if number:
+		y_offset += text_height
+	for i in xrange(len(images)):
+		if x_offset + images[i].size[0] > image_width:
 			x_offset = margin
 			y_offset += height_of_row + margin
+			if number:
+				y_offset += text_height
 		
-		combined_img.paste(im, (x_offset, y_offset), im)
-		x_offset += im.size[0] + margin
+		combined_img.paste(images[i], (x_offset, y_offset), images[i])
+		if number:
+			draw.text((x_offset, y_offset - text_height), str(i) + ")", font=font, fill=(0,0,0,224))
+		x_offset += images[i].size[0] + margin
 
 	combined_img.save(output_file)
 
@@ -94,8 +120,13 @@ if __name__ == "__main__":
 		type=int,
 		help="margin size in pixel",
 	)
+	parser.add_argument(
+		"--number",
+		action="store_true",
+		help="true if the number is to be displayed",
+	)
+	parser.set_defaults(number=False)
 	args = parser.parse_args()
-	
 
-	main(args.directory_path, args.output, args.rows, args.height, args.margin)
+	main(args.directory_path, args.output, args.rows, args.height, args.margin, args.number)
 	

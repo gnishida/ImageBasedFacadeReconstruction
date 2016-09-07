@@ -42,6 +42,10 @@ int main() {
 			cv::Mat_<float> Hor;
 			fs::computeVerAndHor2(img, Ver, Hor);
 
+			// smoothing
+			cv::blur(Ver, Ver, cv::Size(11, 11));
+			cv::blur(Hor, Hor, cv::Size(11, 11));
+
 			// Facadeのsplit linesを求める
 			std::vector<float> x_split;
 			std::vector<float> y_split;

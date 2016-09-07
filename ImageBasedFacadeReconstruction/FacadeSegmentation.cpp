@@ -9,8 +9,11 @@ namespace fs {
 		// compute Ver(y) and Hor(x)
 		cv::Mat_<float> Ver;
 		cv::Mat_<float> Hor;
-		//computeVerAndHor(img, Ver, Hor);
 		computeVerAndHor2(img, Ver, Hor);
+
+		// smoothing
+		cv::blur(Ver, Ver, cv::Size(11, 11));
+		cv::blur(Hor, Hor, cv::Size(11, 11));
 
 		// Facadeのsplit linesを求める
 		getSplitLines2(Ver, 4, y_split);
@@ -294,10 +297,6 @@ namespace fs {
 		// sum up the gradient magnitude horizontally and vertically
 		cv::reduce(sobely, Hor, 0, CV_REDUCE_SUM);
 		cv::reduce(sobelx, Ver, 1, CV_REDUCE_SUM);
-
-		// smoothing
-		cv::blur(Ver, Ver, cv::Size(11, 11));
-		cv::blur(Hor, Hor, cv::Size(11, 11));
 	}
 
 	/**
@@ -627,6 +626,8 @@ namespace fs {
 				split_positions.push_back(mat.rows);
 			}
 		}
+
+		refineSplitLines(split_positions);
 	}
 
 	/**
