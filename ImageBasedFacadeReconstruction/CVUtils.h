@@ -24,7 +24,8 @@ namespace cvutils {
 	bool isLocalMaximum(const cv::Mat& mat, int index, int num);
 	std::vector<int> getPeak(const cv::Mat& mat, bool smooth, int sigma, int flag = 1, int width = 1);
 	float getMostPopularValue(const cv::Mat& h_max, float sigma, float min_value);
-	float findNextMax(cv::Mat mat, int index);
+	float findNextMax(cv::Mat mat, int index, int& max_index);
+	bool findNextMax(cv::Mat mat, int index, int dir, int& max_index, float& max_value);
 	void outputImageWithVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalGraph(const cv::Mat& img, const cv::Mat& hor, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);
 	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const std::string& filename, int flag = 0, int continuous_num = 1, int lineWidth = 1);

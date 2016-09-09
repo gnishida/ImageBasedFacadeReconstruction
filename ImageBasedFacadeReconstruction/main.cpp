@@ -53,47 +53,11 @@ int main() {
 			fs::getSplitLines2(Hor, 4, x_split);
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
+
 		}
 
-		/*
-		cv::Mat grayImg;
-		cvutils::grayScale(img, grayImg);
-		cv::Mat sobelx;
-		cv::Sobel(grayImg, sobelx, CV_32F, 1, 0);
-		sobelx = cv::abs(sobelx);
-		cv::Mat sobely;
-		cv::Sobel(grayImg, sobely, CV_32F, 0, 1);
-		sobely = cv::abs(sobely);
 
-		cv::Mat gradx;
-		cv::Mat grady;
-		cv::reduce(sobely, gradx, 0, CV_REDUCE_SUM);
-		cv::reduce(sobelx, grady, 1, CV_REDUCE_SUM);
-		cv::blur(gradx, gradx, cv::Size(11, 11));
-		cv::blur(grady, grady, cv::Size(11, 11));
-		*/
-		/*
-		std::ofstream out(dir_fft.string() + it->path().filename().string() + "_hor.txt");
-		for (int c = 0; c < gradx.cols; ++c) {
-			out << gradx.at<float>(0, c) << std::endl;
-		}
-		out.close();
-		std::ofstream out2(dir_fft.string() + it->path().filename().string() + "_ver.txt");
-		for (int r = 0; r < grady.rows; ++r) {
-			out2 << grady.at<float>(r, 0) << std::endl;
-		}
-		out2.close();
-		*/
 
-		//cvutils::outputImageWithHorizontalAndVerticalGraph(img, grady, gradx, dir_grad.string() + it->path().filename().string(), cvutils::LOCAL_MINIMUM, 4, 1);
-		
-		/*
-		std::ofstream out(dir_fft.string() + it->path().filename().string() + "_hor.txt");
-		for (int c = 0; c < gradx.cols; ++c) {
-			out << gradx.at<float>(0, c) << std::endl;
-		}
-		out.close();
-		*/
 
 		// subdivide the facade into tiles and windows
 		std::vector<float> x_split;

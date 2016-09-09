@@ -28,6 +28,7 @@ namespace fs {
 	void computeVerAndHor(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>& Hor, float sigma);
 	void computeVerAndHor2(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>& Hor);
 	bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int tile_margin, WindowPos& winpos);
+	bool subdivideTile2(const cv::Mat& tile, cv::Mat& Ver, cv::Mat& Hor, int min_size, int tile_margin, WindowPos& winpos);
 	void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver, float min_interval, float max_interval, std::vector<int>& y_split);
 	void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, std::vector<int>& x_split);
 	void getSplitLines(const cv::Mat_<float>& mat, int size, std::vector<float>& split_positions);
@@ -38,7 +39,7 @@ namespace fs {
 	float computeEnergy(std::vector<std::vector<WindowPos>> &winpos, int u, int v, const std::vector<float>& y_split, const std::vector<float>& x_split, const cv::Mat& edge_img);
 
 	// visualization
-	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_set, const std::vector<float>& x_set, const std::string& filename, int lineWidth);
+	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::string& filename, int lineWidth);
 	void outputFacadeAndWindows(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename);
 	void outputWindows(const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename);
 	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const std::vector<float>& ys, const cv::Mat& hor, const std::vector<float>& xs, const std::string& filename, int lineWidth);

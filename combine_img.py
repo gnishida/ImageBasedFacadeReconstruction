@@ -88,7 +88,7 @@ def main(directory_path, output_file, rows, height_of_row, margin, number):
 		
 		combined_img.paste(images[i], (x_offset, y_offset), images[i])
 		if number:
-			draw.text((x_offset, y_offset - text_height), str(i) + ")", font=font, fill=(0,0,0,224))
+			draw.text((x_offset, y_offset - text_height), str(i + 1) + ")", font=font, fill=(0,0,0,224))
 		x_offset += images[i].size[0] + margin
 
 	combined_img.save(output_file)

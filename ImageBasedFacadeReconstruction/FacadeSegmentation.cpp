@@ -43,8 +43,11 @@ namespace fs {
 				cv::Mat tile(img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 				cv::Mat tile_edges(edge_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 				if (subdivideTile(tile, tile_edges, 10, 1, win_rects[i][j])) {
+				//if (subdivideTile2(tile, Ver, Hor, 10, 1, win_rects[i][j])) {
 					window_count++;
 				}
+				//subdivideTile2(tile, Ver, Hor);
+
 			}
 		}
 		//std::cout << "Window count: " << window_count << std::endl;
@@ -419,6 +422,72 @@ namespace fs {
 	}
 
 	/**
+	* tile内のwindowを検出し、その矩形座標を返却する。
+	* windowが検出されなかった場合はfalseを返却する。
+	*
+	* @param tile					タイル画像 (3-channel image)
+	* @param min_size
+	* @param horizontal_edge_max	水平分割線に対する、エッジの強さの最小値
+	* @param rect
+	* @return						分割する場合はtrue / false otherwise
+	*/
+	bool subdivideTile2(const cv::Mat& tile, cv::Mat& Ver, cv::Mat& Hor, int min_size, int tile_margin, WindowPos& winpos) {
+		if (tile.cols < min_size || tile.rows < min_size) {
+			winpos.valid = WindowPos::INVALID;
+			return false;
+		}
+
+		cv::Mat grayTile;
+		cv::cvtColor(tile, grayTile, CV_BGR2GRAY);
+
+		cv::Mat sobelx;
+		cv::Mat sobely;
+		cv::Sobel(grayTile, sobelx, CV_32F, 1, 0);
+		sobelx = cv::abs(sobelx);
+		cv::Sobel(grayTile, sobely, CV_32F, 0, 1);
+		sobely = cv::abs(sobely);
+
+		// sum up the gradient magnitude horizontally and vertically
+		cv::reduce(sobely, Ver, 1, CV_REDUCE_SUM);
+		cv::reduce(sobelx, Hor, 0, CV_REDUCE_SUM);
+
+		cv::blur(Ver, Ver, cv::Size(3, 3));
+		cv::blur(Hor, Hor, cv::Size(3, 3));
+
+		float value;
+
+		// find the vertical edges (or x coordinates) that are closest to the side boundary
+		int x1 = -1;
+		if (!cvutils::findNextMax(Hor, tile_margin, 1, x1, value)) {
+			x1 = -1;
+		}
+		int x2 = -1;
+		if (!cvutils::findNextMax(Hor, Hor.cols - 1 - tile_margin, -1, x2, value)) {
+			x2 = -1;
+		}
+		if (x1 == -1 || x2 == -1 || x2 - x1 <= 1) {
+			winpos.valid = WindowPos::UNCERTAIN;
+			return false;
+		}
+
+		// find the horizontqal edges (or y coordinates) that are closest to the top and bottom boundaries
+		int y1 = -1;
+		if (!cvutils::findNextMax(Ver, tile_margin, 1, y1, value)) {
+			y1 = -1;
+		}
+		int y2 = -1;
+		if (!cvutils::findNextMax(Ver, Ver.rows - 1 - tile_margin, -1, y2, value)) {
+			y2 = -1;
+		}
+		if (y1 == -1 || y2 == -1 || y2 - y1 <= 1) {
+			winpos.valid = WindowPos::UNCERTAIN;
+			return false;
+		}
+
+		winpos = WindowPos(x1, y1, tile.cols - 1 - x2, tile.rows - 1 - y2);
+	}
+
+	/**
 	* Ver(y)の極小値をsplit lineの候補とし、S_max(y)に基づいて最適なsplit lineの組み合わせを探す。
 	*
 	* @param Ver			Ver(y)
@@ -674,7 +743,8 @@ namespace fs {
 		split_positions.clear();
 		std::vector<float> diffs;
 		for (int i = 1; i < tmp_positions.size() - 1; ++i) {
-			float diff = cvutils::findNextMax(mat, tmp_positions[i]) - mat.at<float>(tmp_positions[i], 0);
+			int tmp = 0;
+			float diff = cvutils::findNextMax(mat, tmp_positions[i], tmp) - mat.at<float>(tmp_positions[i], 0);
 			diffs.push_back(diff);
 		}
 
@@ -1210,14 +1280,26 @@ namespace fs {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// visualization
 
-	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_set, const std::vector<float>& x_set, const std::string& filename, int lineWidth) {
+	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::string& filename, int lineWidth) {
 		cv::Mat result = img.clone();
 
-		for (int i = 0; i < y_set.size(); ++i) {
-			cv::line(result, cv::Point(0, y_set[i]), cv::Point(img.cols, y_set[i]), cv::Scalar(0, 0, 255), lineWidth);
+		for (int i = 0; i < y_split.size(); ++i) {
+			if (i < y_split.size() - 1) {
+				cv::line(result, cv::Point(0, y_split[i]), cv::Point(img.cols, y_split[i]), cv::Scalar(0, 0, 255), lineWidth);
+			}
+			else {
+				// For the last line, we need to move the line upward by 1px to make it inside the image.
+				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(img.cols, y_split[i] - 1), cv::Scalar(0, 0, 255), lineWidth);
+			}
 		}
-		for (int i = 0; i < x_set.size(); ++i) {
-			cv::line(result, cv::Point(x_set[i], 0), cv::Point(x_set[i], img.rows), cv::Scalar(0, 0, 255), lineWidth);
+		for (int i = 0; i < x_split.size(); ++i) {
+			if (i < x_split.size() - 1) {
+				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], img.rows), cv::Scalar(0, 0, 255), lineWidth);
+			}
+			else {
+				// For the last line, we need to move the line upward by 1px to make it inside the image.
+				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, img.rows), cv::Scalar(0, 0, 255), lineWidth);
+			}
 		}
 		cv::imwrite(filename, result);
 	}
@@ -1225,15 +1307,22 @@ namespace fs {
 	void outputFacadeAndWindows(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename) {
 		cv::Mat result = img.clone();
 		for (int i = 0; i < y_split.size(); ++i) {
-			cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
+			if (i < y_split.size() - 1) {
+				cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
+			}
+			else {
+				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(result.cols - 1, y_split[i] - 1), cv::Scalar(0, 0, 255), 1);
+			}
 		}
 		for (int i = 0; i < x_split.size(); ++i) {
-			cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], result.rows - 1), cv::Scalar(0, 0, 255), 1);
+			if (i < x_split.size() - 1) {
+				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], result.rows - 1), cv::Scalar(0, 0, 255), 1);
+			}
+			else {
+				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, result.rows - 1), cv::Scalar(0, 0, 255), 1);
+			}
 		}
 		for (int i = 0; i < y_split.size() - 1; ++i) {
-			if (i == 9) {
-				int hoge = 0;
-			}
 			for (int j = 0; j < x_split.size() - 1; ++j) {
 				if (winpos[i][j].valid == WindowPos::VALID) {
 					int x1 = x_split[j] + winpos[i][j].left;

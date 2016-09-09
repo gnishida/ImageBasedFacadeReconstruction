@@ -467,37 +467,109 @@ namespace cvutils {
 	}
 
 	/**
-	 * 指定されたindexから周辺の値を調べ、極大値を返却する。
-	 */
-	float findNextMax(cv::Mat mat, int index) {
+	* 指定されたindexから周辺の値を調べ、極大値を返却する。
+	*/
+	float findNextMax(cv::Mat mat, int index, int& max_index) {
 		if (mat.rows == 1) {
 			mat = mat.t();
 		}
 
+		bool foundLocalMin = false;
 		float val = mat.at<float>(index, 0);
 		for (int r = index - 1; r >= 0; --r) {
-			if (mat.at<float>(r, 0) > val) {
+			if (!foundLocalMin) {
+				if (mat.at<float>(r, 0) > val) {
+					foundLocalMin = true;
+				}
 				val = mat.at<float>(r, 0);
 			}
 			else {
-				break;
+				if (mat.at<float>(r, 0) > val) {
+					val = mat.at<float>(r, 0);
+				}
+				else {
+					break;
+				}
 			}
 		}
 		float max_val = val;
 
+		foundLocalMin = false;
 		val = mat.at<float>(index, 0);
 		for (int r = index + 1; r < mat.rows; ++r) {
-			if (mat.at<float>(r, 0) > val) {
+			if (!foundLocalMin) {
+				if (mat.at<float>(r, 0) > val) {
+					foundLocalMin = true;
+				}
 				val = mat.at<float>(r, 0);
 			}
 			else {
-				break;
+				if (mat.at<float>(r, 0) > val) {
+					val = mat.at<float>(r, 0);
+				}
+				else {
+					break;
+				}
 			}
 		}
 
 		if (val > max_val) max_val = val;
 
 		return max_val;
+	}
+
+	/**
+	* 指定されたindexから周辺の値を調べ、極大値を返却する。
+	*/
+	bool findNextMax(cv::Mat mat, int index, int dir, int& max_index, float& max_value) {
+		if (mat.rows == 1) {
+			mat = mat.t();
+		}
+
+		bool foundLocalMin = false;
+		float val = mat.at<float>(index, 0);
+		if (dir == -1) {
+			for (int r = index - 1; r >= 0; --r) {
+				if (!foundLocalMin) {
+					if (mat.at<float>(r, 0) > val) {
+						foundLocalMin = true;
+					}
+					val = mat.at<float>(r, 0);
+				}
+				else {
+					if (mat.at<float>(r, 0) > val) {
+						val = mat.at<float>(r, 0);
+					}
+					else {
+						max_index = r + 1;
+						max_value = val;
+						return true;
+					}
+				}
+			}
+			return false;
+		}
+		else {
+			for (int r = index + 1; r < mat.rows; ++r) {
+				if (!foundLocalMin) {
+					if (mat.at<float>(r, 0) > val) {
+						foundLocalMin = true;
+					}
+					val = mat.at<float>(r, 0);
+				}
+				else {
+					if (mat.at<float>(r, 0) > val) {
+						val = mat.at<float>(r, 0);
+					}
+					else {
+						max_index = r - 1;
+						max_value = val;
+						return true;
+					}
+				}
+			}
+			return false;
+		}
 	}
 
 	/**
