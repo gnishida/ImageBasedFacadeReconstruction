@@ -22,9 +22,10 @@
 #include <boost/filesystem.hpp>
 
 int main() {
-	bool align_windows = true;
+	bool align_windows = false;
 
-	boost::filesystem::path dir("../testdata/");
+	//boost::filesystem::path dir("../testdata/");
+	boost::filesystem::path dir("../testdata2/");
 	boost::filesystem::path dir_subdiv("../subdivision/");
 	boost::filesystem::path dir_win("../windows/");
 	boost::filesystem::path dir_results("../results/");
@@ -68,9 +69,9 @@ int main() {
 		std::cout << it->path().filename().string() << std::endl;
 
 		// visualize the segmentation and save it to files
-		fs::outputFacadeStructure(img, y_split, x_split, dir_subdiv.string() + it->path().filename().string(), 1);
-		fs::outputFacadeAndWindows(img, y_split, x_split, win_rects, dir_win.string() + it->path().filename().string());
-		fs::outputWindows(y_split, x_split, win_rects, dir_results.string() + it->path().filename().string());
+		fs::outputFacadeStructure(img, y_split, x_split, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
+		fs::outputFacadeAndWindows(img, y_split, x_split, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
+		fs::outputWindows(y_split, x_split, win_rects, dir_results.string() + it->path().filename().string(), cv::Scalar(0, 0, 0), 1);
 	}
 
 	return 0;

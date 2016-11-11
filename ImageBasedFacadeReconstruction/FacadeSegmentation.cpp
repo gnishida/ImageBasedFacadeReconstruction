@@ -42,7 +42,7 @@ namespace fs {
 			for (int j = 0; j < x_split.size() - 1; ++j) {
 				cv::Mat tile(img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 				cv::Mat tile_edges(edge_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
-				if (subdivideTile(tile, tile_edges, 10, 1, win_rects[i][j])) {
+				if (subdivideTile(tile, tile_edges, 10, 3, win_rects[i][j])) {
 				//if (subdivideTile2(tile, Ver, Hor, 10, 1, win_rects[i][j])) {
 					window_count++;
 				}
@@ -882,6 +882,7 @@ namespace fs {
 	}
 
 	void align(const cv::Mat& edge_img, const std::vector<float>& y_split, const std::vector<float>& x_split, std::vector<std::vector<WindowPos>> &winpos, int max_iter) {
+#if 0
 		for (int iter = 0; iter < max_iter; ++iter) {
 			// 各カラムについて、窓のx座標をそろえる
 			for (int j = 0; j < x_split.size() - 1; ++j) {
@@ -1018,10 +1019,10 @@ namespace fs {
 				}
 			}
 		}
+#endif
 
 
-
-#if 0
+#if 1
 		// 窓のX座標をvoteする
 		for (int j = 0; j < x_split.size() - 1; ++j) {
 			int max_left, max_right;
@@ -1280,46 +1281,46 @@ namespace fs {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// visualization
 
-	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::string& filename, int lineWidth) {
+	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
 		cv::Mat result = img.clone();
 
 		for (int i = 0; i < y_split.size(); ++i) {
 			if (i < y_split.size() - 1) {
-				cv::line(result, cv::Point(0, y_split[i]), cv::Point(img.cols, y_split[i]), cv::Scalar(0, 0, 255), lineWidth);
+				cv::line(result, cv::Point(0, y_split[i]), cv::Point(img.cols, y_split[i]), lineColor, lineWidth);
 			}
 			else {
 				// For the last line, we need to move the line upward by 1px to make it inside the image.
-				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(img.cols, y_split[i] - 1), cv::Scalar(0, 0, 255), lineWidth);
+				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(img.cols, y_split[i] - 1), lineColor, lineWidth);
 			}
 		}
 		for (int i = 0; i < x_split.size(); ++i) {
 			if (i < x_split.size() - 1) {
-				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], img.rows), cv::Scalar(0, 0, 255), lineWidth);
+				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], img.rows), lineColor, lineWidth);
 			}
 			else {
 				// For the last line, we need to move the line upward by 1px to make it inside the image.
-				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, img.rows), cv::Scalar(0, 0, 255), lineWidth);
+				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, img.rows), lineColor, lineWidth);
 			}
 		}
 		cv::imwrite(filename, result);
 	}
 
-	void outputFacadeAndWindows(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename) {
+	void outputFacadeAndWindows(const cv::Mat& img, const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
 		cv::Mat result = img.clone();
 		for (int i = 0; i < y_split.size(); ++i) {
 			if (i < y_split.size() - 1) {
-				cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), 1);
+				cv::line(result, cv::Point(0, y_split[i]), cv::Point(result.cols - 1, y_split[i]), cv::Scalar(0, 0, 255), lineWidth);
 			}
 			else {
-				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(result.cols - 1, y_split[i] - 1), cv::Scalar(0, 0, 255), 1);
+				cv::line(result, cv::Point(0, y_split[i] - 1), cv::Point(result.cols - 1, y_split[i] - 1), cv::Scalar(0, 0, 255), lineWidth);
 			}
 		}
 		for (int i = 0; i < x_split.size(); ++i) {
 			if (i < x_split.size() - 1) {
-				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], result.rows - 1), cv::Scalar(0, 0, 255), 1);
+				cv::line(result, cv::Point(x_split[i], 0), cv::Point(x_split[i], result.rows - 1), cv::Scalar(0, 0, 255), lineWidth);
 			}
 			else {
-				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, result.rows - 1), cv::Scalar(0, 0, 255), 1);
+				cv::line(result, cv::Point(x_split[i] - 1, 0), cv::Point(x_split[i] - 1, result.rows - 1), cv::Scalar(0, 0, 255), lineWidth);
 			}
 		}
 		for (int i = 0; i < y_split.size() - 1; ++i) {
@@ -1329,14 +1330,14 @@ namespace fs {
 					int y1 = y_split[i] + winpos[i][j].top;
 					int x2 = x_split[j + 1] - 1 - winpos[i][j].right;
 					int y2 = y_split[i + 1] - 1 - winpos[i][j].bottom;
-					cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), cv::Scalar(255, 0, 0), 1);
+					cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), lineColor, lineWidth);
 				}
 			}
 		}
 		cv::imwrite(filename, result);
 	}
 
-	void outputWindows(const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename) {
+	void outputWindows(const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
 		cv::Mat result(y_split.back(), x_split.back(), CV_8UC3, cv::Scalar(255, 255, 255));
 		for (int i = 0; i < y_split.size() - 1; ++i) {
 			if (i == 9) {
@@ -1348,7 +1349,7 @@ namespace fs {
 					int y1 = y_split[i] + winpos[i][j].top;
 					int x2 = x_split[j + 1] - 1 - winpos[i][j].right;
 					int y2 = y_split[i + 1] - 1 - winpos[i][j].bottom;
-					cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), cv::Scalar(255, 0, 0), 1);
+					cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), lineColor, lineWidth);
 				}
 			}
 		}
