@@ -32,8 +32,8 @@ namespace fs {
 	void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver, float min_interval, float max_interval, std::vector<int>& y_split);
 	void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, std::vector<int>& x_split);
 	void getSplitLines(const cv::Mat_<float>& mat, int size, std::vector<float>& split_positions);
-	void getSplitLines2(const cv::Mat_<float>& mat, int size, std::vector<float>& split_positions);
 	void refineSplitLines(std::vector<float>& split_positions);
+	void distributeSplitLines(std::vector<float>& split_positions);
 	void refine(std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& winpos, float threshold);
 	void align(const cv::Mat& edge_img, const std::vector<float>& y_split, const std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& winpos, int max_iter);
 	float computeEnergy(std::vector<std::vector<WindowPos>> &winpos, int u, int v, const std::vector<float>& y_split, const std::vector<float>& x_split, const cv::Mat& edge_img);

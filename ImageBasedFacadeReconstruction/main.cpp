@@ -24,8 +24,8 @@
 int main() {
 	bool align_windows = false;
 
-	//boost::filesystem::path dir("../testdata/");
-	boost::filesystem::path dir("../testdata2/");
+	boost::filesystem::path dir("../testdata/");
+	//boost::filesystem::path dir("../testdata2/");
 	boost::filesystem::path dir_subdiv("../subdivision/");
 	boost::filesystem::path dir_win("../windows/");
 	boost::filesystem::path dir_results("../results/");
@@ -50,8 +50,8 @@ int main() {
 			// Facadeのsplit linesを求める
 			std::vector<float> x_split;
 			std::vector<float> y_split;
-			fs::getSplitLines2(Ver, 4, y_split);
-			fs::getSplitLines2(Hor, 4, x_split);
+			fs::getSplitLines(Ver, 4, y_split);
+			fs::getSplitLines(Hor, 4, x_split);
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
 

@@ -16,8 +16,11 @@ namespace fs {
 		cv::blur(Hor, Hor, cv::Size(11, 11));
 
 		// Facadeのsplit linesを求める
-		getSplitLines2(Ver, 4, y_split);
-		getSplitLines2(Hor, 4, x_split);
+		getSplitLines(Ver, 3, y_split);
+		//refineSplitLines(y_split);
+		distributeSplitLines(y_split);
+		getSplitLines(Hor, 3, x_split);
+		refineSplitLines(x_split);
 
 		// detect edges
 		cv::Mat edge_img;
@@ -660,49 +663,9 @@ namespace fs {
 	}
 
 	/**
-	 * 与えられた関数の極小値を使ってsplit lineを決定する。
-	 */
-	void getSplitLines(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
-		cv::Mat_<float> mat = val.clone();
-		if (mat.rows == 1) {
-			mat = mat.t();
-		}
-
-		for (int r = 0; r < mat.rows; ++r) {
-			if (cvutils::isLocalMinimum(mat, r, size)) {
-				split_positions.push_back(r);
-			}
-		}
-
-		// 両端処理
-		if (split_positions.size() == 0) {
-			split_positions.insert(split_positions.begin(), 0);
-		}
-		else if (split_positions[0] > 0) {
-			if (split_positions[0] < 5) {
-				split_positions[0] = 0;
-			}
-			else {
-				split_positions.insert(split_positions.begin(), 0);
-			}
-		}
-
-		if (split_positions.back() < mat.rows) {
-			if (split_positions.back() >= mat.rows - 5) {
-				split_positions.back() = mat.rows;
-			}
-			else {
-				split_positions.push_back(mat.rows);
-			}
-		}
-
-		refineSplitLines(split_positions);
-	}
-
-	/**
 	* 与えられた関数の極小値を使ってsplit lineを決定する。
 	*/
-	void getSplitLines2(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
+	void getSplitLines(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
 		cv::Mat_<float> mat = val.clone();
 		if (mat.rows == 1) {
 			mat = mat.t();
@@ -739,32 +702,38 @@ namespace fs {
 		////////////////////////////////////////////////////////////
 		// 一旦、極小値を取得した後、隣接する極大値との差のmedianを計算し、
 		// medianより極端に小さい場合は、その極小値を削除する。
-		std::vector<float> tmp_positions = split_positions;
-		split_positions.clear();
-		std::vector<float> diffs;
-		for (int i = 1; i < tmp_positions.size() - 1; ++i) {
-			int tmp = 0;
-			float diff = cvutils::findNextMax(mat, tmp_positions[i], tmp) - mat.at<float>(tmp_positions[i], 0);
-			diffs.push_back(diff);
-		}
+		bool updated = true;
+		while (updated) {
+			updated = false;
 
-		float diff_median = utils::median(diffs);
+			std::vector<float> tmp_positions = split_positions;
+			split_positions.clear();
+			std::vector<float> diffs;
+			for (int i = 1; i < tmp_positions.size() - 1; ++i) {
+				int tmp = 0;
+				float diff = cvutils::findNextMax(mat, tmp_positions[i], tmp) - mat.at<float>(tmp_positions[i], 0);
+				diffs.push_back(diff);
+			}
 
-		for (int i = 0; i < tmp_positions.size(); ++i) {
-			if (i == 0) {
-				split_positions.push_back(tmp_positions[i]);
-			}
-			else if (i == tmp_positions.size() - 1) {
-				split_positions.push_back(tmp_positions[i]);
-			}
-			else {
-				if (diffs[i - 1] >= diff_median * 0.5) {
+			float diff_median = utils::median(diffs);
+
+			for (int i = 0; i < tmp_positions.size(); ++i) {
+				if (i == 0) {
 					split_positions.push_back(tmp_positions[i]);
+				}
+				else if (i == tmp_positions.size() - 1) {
+					split_positions.push_back(tmp_positions[i]);
+				}
+				else {
+					if (diffs[i - 1] >= diff_median * 0.5) {
+						split_positions.push_back(tmp_positions[i]);
+					}
+					else {
+						updated = true;
+					}
 				}
 			}
 		}
-
-		refineSplitLines(split_positions);
 	}
 
 	void refineSplitLines(std::vector<float>& split_positions) {
@@ -798,6 +767,71 @@ namespace fs {
 			}
 
 			if (!updated) break;
+		}
+	}
+
+	/**
+	 * 分割線の一部を削除し、分割線の間隔が等間隔に近くなるようにする。
+	 */
+	void distributeSplitLines(std::vector<float>& split_positions) {
+		std::vector<int> flags(split_positions.size() - 2, 0);
+
+		float min_stddev = std::numeric_limits<float>::max();
+		std::vector<int> min_flags;
+
+		while (true) {
+			// count 1s
+			int cnt_ones = 0;
+			for (int i = 0; i < flags.size(); ++i) {
+				if (flags[i] == 1) cnt_ones++;
+			}
+
+			// valid only if 1s are more than half
+			if ((float)(cnt_ones + 2) / split_positions.size() > 0.5) {
+				// compute the distances between split lines
+				std::vector<float> intervals;
+				float prev_pos = split_positions[0];
+				for (int i = 1; i < split_positions.size(); ++i) {
+					if (i < split_positions.size() - 1 && flags[i - 1] == 0) continue;
+
+					intervals.push_back(split_positions[i] - prev_pos);
+					prev_pos = split_positions[i];
+				}
+
+				// compute the stddev of intervals
+				float stddev = utils::stddev(intervals);
+
+				// update the minimum stddev
+				if (stddev < min_stddev) {
+					min_stddev = stddev;
+					min_flags = flags;
+				}
+			}
+
+			// next permutation
+			bool carried = false;
+			for (int i = 0; i < flags.size(); ++i) {
+				if (flags[i] == 1) {
+					flags[i] = 0;
+				}
+				else if (flags[i] == 0) {
+					flags[i] = 1;
+					carried = true;
+					break;
+				}
+			}
+			if (!carried) break;
+		}
+
+		std::vector<float> tmp = split_positions;
+		split_positions.clear();
+		for (int i = 0; i < tmp.size(); ++i) {
+			if (i == 0 || i == tmp.size() - 1) {
+				split_positions.push_back(tmp[i]);
+			}
+			else if (min_flags[i - 1] == 1) {
+				split_positions.push_back(tmp[i]);
+			}
 		}
 	}
 

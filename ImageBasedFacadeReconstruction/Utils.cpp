@@ -20,6 +20,21 @@ namespace utils {
 		}
 	}
 
+	float stddev(std::vector<float> list) {
+		float sum = 0.0f;
+		for (int i = 0; i < list.size(); ++i) {
+			sum += list[i];
+		}
+		float avg = sum / list.size();
+
+		float total = 0.0f;
+		for (int i = 0; i < list.size(); ++i) {
+			total += (list[i] - avg) * (list[i] - avg);
+		}
+
+		return sqrt(total / (list.size() - 1));
+	}
+
 	/**
 	 * ２つの数列がベストマッチするよう、２つ目の数列を変換する。
 	 *
