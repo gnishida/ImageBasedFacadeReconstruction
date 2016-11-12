@@ -179,11 +179,10 @@ namespace cvutils {
 		if (img.channels() == 1) {
 			grayImg = img.clone();
 		}
-		else if (img.channels() == 3) {
-			cv::cvtColor(img, grayImg, cv::COLOR_BGR2GRAY);
-		}
-		else if (img.channels() == 4) {
-			cv::cvtColor(img, grayImg, cv::COLOR_BGRA2GRAY);
+		else if (img.channels() >= 3) {
+			std::vector<cv::Mat> img_channels;
+			cv::split(img, img_channels);
+			grayImg = img_channels[0] * 0.114 + img_channels[1] * 0.587 + img_channels[2] * 0.299;
 		}
 	}
 
