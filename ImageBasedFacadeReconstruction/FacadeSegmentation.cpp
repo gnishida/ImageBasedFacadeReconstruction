@@ -2,6 +2,7 @@
 #include "CVUtils.h"
 #include "Utils.h"
 #include <fstream>
+#include "EdgeDetection.h"
 
 namespace fs {
 
@@ -22,17 +23,22 @@ namespace fs {
 		getSplitLines(Hor, 3, x_split);
 		refineSplitLines(x_split);
 
+		// convert to grayscale
+		cv::Mat gray_img;
+		cvutils::grayScale(img, gray_img);
+
 		// detect edges
 		cv::Mat edge_img;
 		//cv::Canny(img, edge_img, 30, 100, 3);
-		cv::Canny(img, edge_img, 50, 120, 3);
+		cv::Canny(gray_img, edge_img, 50, 120, 3);
 
 		// facadeの端のエッジを削除する
-		int margin = 4;
+		int margin = 10;
 		for (int r = 0; r < edge_img.rows; ++r) {
 			for (int c = 0; c < edge_img.cols; ++c) {
 				if (r < margin || r >= edge_img.rows - margin || c < margin || c >= edge_img.cols - margin) {
 					edge_img.at<unsigned char>(r, c) = 0;
+
 				}
 			}
 		}
@@ -43,13 +49,12 @@ namespace fs {
 		for (int i = 0; i < y_split.size() - 1; ++i) {
 			win_rects[i].resize(x_split.size() - 1);
 			for (int j = 0; j < x_split.size() - 1; ++j) {
-				cv::Mat tile(img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
+				cv::Mat tile(gray_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 				cv::Mat tile_edges(edge_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
+
 				if (subdivideTile(tile, tile_edges, 10, 3, win_rects[i][j])) {
-				//if (subdivideTile2(tile, Ver, Hor, 10, 1, win_rects[i][j])) {
 					window_count++;
 				}
-				//subdivideTile2(tile, Ver, Hor);
 
 			}
 		}
@@ -321,9 +326,6 @@ namespace fs {
 			return false;
 		}
 
-		cv::Mat grayTile;
-		cv::cvtColor(tile, grayTile, CV_BGR2GRAY);
-
 		// sum horizontally and vertically
 		cv::Mat vertical_edges;
 		cv::Mat horizontal_edges;
@@ -348,7 +350,7 @@ namespace fs {
 					prev_x1 = vertical_edges.at<float>(0, c);
 				}
 			}
-			else if (vertical_edges.at<float>(0, c) > prev_x1) {
+			else if (cvutils::isLocalMaximum(vertical_edges, c, 3)) {
 				x1 = c;
 				prev_x1 = vertical_edges.at<float>(0, c);
 			}
@@ -366,7 +368,7 @@ namespace fs {
 					prev_x2 = vertical_edges.at<float>(0, c);
 				}
 			}
-			else if (vertical_edges.at<float>(0, c) > prev_x2) {
+			else if (cvutils::isLocalMaximum(vertical_edges, c, 3)) {
 				x2 = c;
 				prev_x2 = vertical_edges.at<float>(0, c);
 			}
@@ -389,7 +391,7 @@ namespace fs {
 					prev_y1 = horizontal_edges.at<float>(r, 0);
 				}
 			}
-			else if (horizontal_edges.at<float>(r, 0) > prev_y1) {
+			else if (cvutils::isLocalMaximum(horizontal_edges, r, 3)) {
 				y1 = r;
 				prev_y1 = horizontal_edges.at<float>(r, 0);
 			}
@@ -406,7 +408,7 @@ namespace fs {
 					prev_y2 = horizontal_edges.at<float>(r, 0);
 				}
 			}
-			else if (horizontal_edges.at<float>(r, 0) > prev_y2) {
+			else if (cvutils::isLocalMaximum(horizontal_edges, r, 3)) {
 				y2 = r;
 				prev_y2 = horizontal_edges.at<float>(r, 0);
 			}
@@ -415,6 +417,11 @@ namespace fs {
 			}
 		}
 		if (y1 == -1 || y2 == -1 || y2 - y1 <= 1) {
+			winpos.valid = WindowPos::UNCERTAIN;
+			return false;
+		}
+
+		if ((float)(x2 - x1) / (y2 - y1) > 8.0f || (float)(y2 - y1) / (x2 - x1) > 8.0f) {
 			winpos.valid = WindowPos::UNCERTAIN;
 			return false;
 		}
@@ -434,39 +441,60 @@ namespace fs {
 	* @param rect
 	* @return						分割する場合はtrue / false otherwise
 	*/
-	bool subdivideTile2(const cv::Mat& tile, cv::Mat& Ver, cv::Mat& Hor, int min_size, int tile_margin, WindowPos& winpos) {
+	bool subdivideTile2(const cv::Mat& tile, cv::Mat Ver, cv::Mat Hor, int min_size, int tile_margin, WindowPos& winpos) {
 		if (tile.cols < min_size || tile.rows < min_size) {
 			winpos.valid = WindowPos::INVALID;
 			return false;
 		}
 
-		cv::Mat grayTile;
-		cv::cvtColor(tile, grayTile, CV_BGR2GRAY);
+		//cv::imwrite("tile.png", tile);
 
-		cv::Mat sobelx;
-		cv::Mat sobely;
-		cv::Sobel(grayTile, sobelx, CV_32F, 1, 0);
-		sobelx = cv::abs(sobelx);
-		cv::Sobel(grayTile, sobely, CV_32F, 0, 1);
-		sobely = cv::abs(sobely);
+		outputImageWithHorizontalAndVerticalGraph(tile, Ver, Hor, "graph.png");
 
-		// sum up the gradient magnitude horizontally and vertically
-		cv::reduce(sobely, Ver, 1, CV_REDUCE_SUM);
-		cv::reduce(sobelx, Hor, 0, CV_REDUCE_SUM);
+		double Ver_min, Ver_max;
+		cv::minMaxLoc(Ver, &Ver_min, &Ver_max);
+		double Hor_min, Hor_max;
+		cv::minMaxLoc(Hor, &Hor_min, &Hor_max);
 
-		cv::blur(Ver, Ver, cv::Size(3, 3));
-		cv::blur(Hor, Hor, cv::Size(3, 3));
+		float vertical_edge_threshold = (Ver_max - Ver_min) * 0.25f + Ver_min;
+		float horizontal_edge_threshold = (Hor_max - Hor_max) * 0.25f + Ver_min;
 
-		float value;
 
-		// find the vertical edges (or x coordinates) that are closest to the side boundary
+		// find the  vertical edges (or x coordinates) that are closest to the side boundary
 		int x1 = -1;
-		if (!cvutils::findNextMax(Hor, tile_margin, 1, x1, value)) {
-			x1 = -1;
+		float prev_x1;
+		for (int c = tile_margin; c < Hor.cols - tile_margin; ++c) {
+			if (x1 == -1) {
+				if (Hor.at<float>(0, c) >= horizontal_edge_threshold) {
+					x1 = c;
+					prev_x1 = Hor.at<float>(0, c);
+				}
+			}
+			else if (Hor.at<float>(0, c) > prev_x1) {
+				x1 = c;
+				prev_x1 = Hor.at<float>(0, c);
+			}
+			else {
+				break;
+			}
+
 		}
 		int x2 = -1;
-		if (!cvutils::findNextMax(Hor, Hor.cols - 1 - tile_margin, -1, x2, value)) {
-			x2 = -1;
+		float prev_x2;
+		for (int c = Hor.cols - tile_margin - 1; c >= tile_margin; --c) {
+			if (x2 == -1) {
+				if (Hor.at<float>(0, c) >= horizontal_edge_threshold) {
+					x2 = c;
+					prev_x2 = Hor.at<float>(0, c);
+				}
+			}
+			else if (Hor.at<float>(0, c) > prev_x2) {
+				x2 = c;
+				prev_x2 = Hor.at<float>(0, c);
+			}
+			else {
+				break;
+			}
 		}
 		if (x1 == -1 || x2 == -1 || x2 - x1 <= 1) {
 			winpos.valid = WindowPos::UNCERTAIN;
@@ -475,19 +503,52 @@ namespace fs {
 
 		// find the horizontqal edges (or y coordinates) that are closest to the top and bottom boundaries
 		int y1 = -1;
-		if (!cvutils::findNextMax(Ver, tile_margin, 1, y1, value)) {
-			y1 = -1;
+		float prev_y1;
+		for (int r = tile_margin; r < Ver.rows - tile_margin; ++r) {
+			if (y1 == -1) {
+				if (Ver.at<float>(r, 0) >= vertical_edge_threshold) {
+					y1 = r;
+					prev_y1 = Ver.at<float>(r, 0);
+				}
+			}
+			else if (Ver.at<float>(r, 0) > prev_y1) {
+				y1 = r;
+				prev_y1 = Ver.at<float>(r, 0);
+			}
+			else {
+				break;
+			}
 		}
 		int y2 = -1;
-		if (!cvutils::findNextMax(Ver, Ver.rows - 1 - tile_margin, -1, y2, value)) {
-			y2 = -1;
+		float prev_y2;
+		for (int r = Ver.rows - tile_margin - 1; r >= tile_margin; --r) {
+			if (y2 == -1) {
+				if (Ver.at<float>(r, 0) >= vertical_edge_threshold) {
+					y2 = r;
+					prev_y2 = Ver.at<float>(r, 0);
+				}
+			}
+			else if (Ver.at<float>(r, 0) > prev_y2) {
+				y2 = r;
+				prev_y2 = Ver.at<float>(r, 0);
+			}
+			else {
+				break;
+			}
 		}
 		if (y1 == -1 || y2 == -1 || y2 - y1 <= 1) {
 			winpos.valid = WindowPos::UNCERTAIN;
 			return false;
 		}
 
+		if ((float)(x2 - x1) / (y2 - y1) > 8.0f || (float)(y2 - y1) / (x2 - x1) > 8.0f) {
+			winpos.valid = WindowPos::UNCERTAIN;
+			return false;
+		}
+
 		winpos = WindowPos(x1, y1, tile.cols - 1 - x2, tile.rows - 1 - y2);
+
+		return true;
 	}
 
 	/**
@@ -1397,13 +1458,20 @@ namespace fs {
 		cv::Scalar graph_color;
 		cv::Scalar peak_color;
 
-		result = cv::Mat(img.rows + graphSize + 3, img.cols + graphSize + 3, img.type(), cv::Scalar(255, 255, 255));
+		result = cv::Mat(img.rows + graphSize + 3, img.cols + graphSize + 3, CV_8UC3, cv::Scalar(255, 255, 255));
 		graph_color = cv::Scalar(0, 0, 0);
 		peak_color = cv::Scalar(0, 0, 255);
 
 		// copy img to result
-		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
-		img.copyTo(roi);
+		cv::Mat color_img;
+		if (img.channels() == 1) {
+			cv::cvtColor(img, color_img, cv::COLOR_GRAY2BGR);
+		}
+		else if (img.channels() == 3) {
+			color_img = img;
+		}
+		cv::Mat roi(result, cv::Rect(0, 0, color_img.cols, color_img.rows));
+		color_img.copyTo(roi);
 
 		// get the maximum value of Ver(y) and Hor(x)
 		float max_ver = cvutils::max(ver);
@@ -1431,6 +1499,53 @@ namespace fs {
 		}
 		for (int i = 0; i < xs.size(); ++i) {
 			cv::line(result, cv::Point(xs[i], 0), cv::Point(xs[i], img.rows - 1), peak_color, lineWidth);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const std::string& filename) {
+		int graphSize = std::max(10.0, std::max(img.rows, img.cols) * 0.3);
+
+		cv::Mat result;
+		cv::Scalar graph_color;
+		cv::Scalar peak_color;
+
+		result = cv::Mat(img.rows + graphSize + 3, img.cols + graphSize + 3, CV_8UC3, cv::Scalar(255, 255, 255));
+		graph_color = cv::Scalar(0, 0, 0);
+		peak_color = cv::Scalar(0, 0, 255);
+
+		// copy img to result
+		cv::Mat color_img;
+		if (img.channels() == 1) {
+			cv::cvtColor(img, color_img, cv::COLOR_GRAY2BGR);
+		}
+		else if (img.channels() == 3) {
+			color_img = img;
+		}
+		cv::Mat roi(result, cv::Rect(0, 0, color_img.cols, color_img.rows));
+		color_img.copyTo(roi);
+
+		// get the maximum value of Ver(y) and Hor(x)
+		float max_ver = cvutils::max(ver);
+		float min_ver = cvutils::min(ver);
+		float max_hor = cvutils::max(hor);
+		float min_hor = cvutils::min(hor);
+
+		// draw vertical graph
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + (cvutils::get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + (cvutils::get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
+		}
+
+		// draw horizontal graph
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + (cvutils::get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (cvutils::get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
 		}
 
 		cv::imwrite(filename, result);

@@ -20,6 +20,7 @@
 #include "FacadeSegmentation.h"
 #include <list>
 #include <boost/filesystem.hpp>
+#include "EdgeDetection.h"
 
 int main() {
 	bool align_windows = false;
@@ -30,12 +31,22 @@ int main() {
 	boost::filesystem::path dir_win("../windows/");
 	boost::filesystem::path dir_results("../results/");
 	boost::filesystem::path dir_grad("../grad/");
-	boost::filesystem::path dir_fft("../fft/");
+	boost::filesystem::path dir_edge("../edge/");
 	for (auto it = boost::filesystem::directory_iterator(dir); it != boost::filesystem::directory_iterator(); ++it) {
 		if (boost::filesystem::is_directory(it->path())) continue;
 
 		// read an image
 		cv::Mat img = cv::imread(dir.string() + it->path().filename().string());
+
+
+		// edge images
+		{
+			cv::Mat gray_img;
+			cvutils::grayScale(img, gray_img);
+			cv::Mat edge_img;
+			cv::Canny(gray_img, edge_img, 50, 120);
+			cv::imwrite(dir_edge.string() + it->path().filename().string(), edge_img);
+		}
 
 		// draw grad curve
 		{
