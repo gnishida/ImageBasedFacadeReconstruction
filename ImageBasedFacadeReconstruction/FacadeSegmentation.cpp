@@ -1435,9 +1435,6 @@ namespace fs {
 	void outputWindows(const std::vector<float>& y_split, const std::vector<float>& x_split, const std::vector<std::vector<WindowPos>>& winpos, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
 		cv::Mat result(y_split.back(), x_split.back(), CV_8UC3, cv::Scalar(255, 255, 255));
 		for (int i = 0; i < y_split.size() - 1; ++i) {
-			if (i == 9) {
-				int hoge = 0;
-			}
 			for (int j = 0; j < x_split.size() - 1; ++j) {
 				if (winpos[i][j].valid == WindowPos::VALID) {
 					int x1 = x_split[j] + winpos[i][j].left;

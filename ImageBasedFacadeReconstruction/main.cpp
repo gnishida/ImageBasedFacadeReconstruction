@@ -24,6 +24,8 @@
 
 int main() {
 	bool align_windows = false;
+	bool resize = false;
+	cv::Size output_size(227, 227);
 
 	boost::filesystem::path dir("../testdata/");
 	//boost::filesystem::path dir("../testdata2/");
@@ -82,6 +84,23 @@ int main() {
 		// visualize the segmentation and save it to files
 		fs::outputFacadeStructure(img, y_split, x_split, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 		fs::outputFacadeAndWindows(img, y_split, x_split, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
+
+		if (resize) {
+			for (int i = 0; i < win_rects.size(); ++i) {
+				for (int j = 0; j < win_rects[i].size(); ++j) {
+					win_rects[i][j].left = win_rects[i][j].left * output_size.width / img.cols;
+					win_rects[i][j].right = win_rects[i][j].right * output_size.width / img.cols;
+					win_rects[i][j].top = win_rects[i][j].top * output_size.height / img.rows;
+					win_rects[i][j].bottom = win_rects[i][j].bottom * output_size.height / img.rows;
+				}
+			}
+			for (int i = 0; i < x_split.size(); ++i) {
+				x_split[i] = x_split[i] * output_size.width / img.cols;
+			}
+			for (int i = 0; i < y_split.size(); ++i) {
+				y_split[i] = y_split[i] * output_size.height / img.rows;
+			}
+		}
 		fs::outputWindows(y_split, x_split, win_rects, dir_results.string() + it->path().filename().string(), cv::Scalar(0, 0, 0), 1);
 	}
 
