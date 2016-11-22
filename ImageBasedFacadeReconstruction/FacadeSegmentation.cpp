@@ -17,11 +17,16 @@ namespace fs {
 		cv::blur(Hor, Hor, cv::Size(11, 11));
 
 		// Facadeのsplit linesを求める
-		getSplitLines(Ver, 3, y_split);
+		//getSplitLines(Ver, 3, 0.5, y_split);
+		getSplitLines2(Ver, 0.2, y_split);
+		refineSplitLines2(y_split, 0.3);
 		//refineSplitLines(y_split);
-		distributeSplitLines(y_split);
-		getSplitLines(Hor, 3, x_split);
-		refineSplitLines(x_split);
+		//distributeSplitLines(y_split, 0.7);
+
+		//getSplitLines(Hor, 3, 0.5, x_split);
+		//refineSplitLines(x_split);
+		getSplitLines2(Hor, 0.1, x_split);
+		refineSplitLines2(x_split, 0.2);
 
 		// convert to grayscale
 		cv::Mat gray_img;
@@ -295,9 +300,13 @@ namespace fs {
 	 * 俺の方式。
 	 */
 	void computeVerAndHor2(const cv::Mat& img, cv::Mat_<float>& Ver, cv::Mat_<float>& Hor) {
-		// compute gradient magnitude
 		cv::Mat grayImg;
 		cvutils::grayScale(img, grayImg);
+
+		// smoothing
+		cv::GaussianBlur(grayImg, grayImg, cv::Size(5, 5), 5, 5);
+
+		// compute gradient magnitude
 		cv::Mat sobelx;
 		cv::Sobel(grayImg, sobelx, CV_32F, 1, 0);
 		sobelx = cv::abs(sobelx);
@@ -726,7 +735,7 @@ namespace fs {
 	/**
 	* 与えられた関数の極小値を使ってsplit lineを決定する。
 	*/
-	void getSplitLines(const cv::Mat_<float>& val, int size, std::vector<float>& split_positions) {
+	void getSplitLines(const cv::Mat_<float>& val, int size, float threshold, std::vector<float>& split_positions) {
 		cv::Mat_<float> mat = val.clone();
 		if (mat.rows == 1) {
 			mat = mat.t();
@@ -786,13 +795,55 @@ namespace fs {
 					split_positions.push_back(tmp_positions[i]);
 				}
 				else {
-					if (diffs[i - 1] >= diff_median * 0.5) {
+					if (diffs[i - 1] >= diff_median * threshold) {
 						split_positions.push_back(tmp_positions[i]);
 					}
 					else {
 						updated = true;
 					}
 				}
+			}
+		}
+	}
+
+	/**
+	* 与えられた関数の極小値を使ってsplit lineを決定する。
+	*/
+	void getSplitLines2(const cv::Mat_<float>& val, float threshold, std::vector<float>& split_positions) {
+		cv::Mat_<float> mat = val.clone();
+		if (mat.rows == 1) {
+			mat = mat.t();
+		}
+
+		double max_value, min_value;
+		cv::minMaxLoc(mat, &min_value, &max_value);
+		threshold *= (max_value - min_value);
+
+		for (int r = 0; r < mat.rows; ++r) {
+			if (isLocalMinimum(mat, r, threshold)) {
+				split_positions.push_back(r);
+			}
+		}
+
+		// 両端処理
+		if (split_positions.size() == 0) {
+			split_positions.insert(split_positions.begin(), 0);
+		}
+		else if (split_positions[0] > 0) {
+			if (split_positions[0] < 5) {
+				split_positions[0] = 0;
+			}
+			else {
+				split_positions.insert(split_positions.begin(), 0);
+			}
+		}
+
+		if (split_positions.back() < mat.rows) {
+			if (split_positions.back() >= mat.rows - 5) {
+				split_positions.back() = mat.rows;
+			}
+			else {
+				split_positions.push_back(mat.rows);
 			}
 		}
 	}
@@ -831,10 +882,44 @@ namespace fs {
 		}
 	}
 
+	// 間隔が狭すぎる場合は、分割して隣接領域にマージする
+	void refineSplitLines2(std::vector<float>& split_positions, float threshold) {
+		// 最大の間隔を計算する（ただし、１階は除く）
+		float max_interval = 0;
+		for (int i = 0; i < split_positions.size() - 2; ++i) {
+			float interval = split_positions[i + 1] - split_positions[i];
+			if (interval > max_interval) max_interval = interval;
+		}
+
+		while (true) {
+			bool updated = false;
+			for (int i = 0; i < split_positions.size() - 1;) {
+				if (split_positions[i + 1] - split_positions[i] < max_interval * threshold) {
+					if (i == 0) {
+						split_positions.erase(split_positions.begin() + 1);
+					}
+					else if (i == split_positions.size() - 2) {
+						split_positions.erase(split_positions.begin() + split_positions.size() - 2);
+					}
+					else {
+						split_positions[i] = (split_positions[i + 1] + split_positions[i]) * 0.5;
+						split_positions.erase(split_positions.begin() + i + 1);
+					}
+					updated = true;
+				}
+				else {
+					i++;
+				}
+			}
+
+			if (!updated) break;
+		}
+	}
+
 	/**
 	 * 分割線の一部を削除し、分割線の間隔が等間隔に近くなるようにする。
 	 */
-	void distributeSplitLines(std::vector<float>& split_positions) {
+	void distributeSplitLines(std::vector<float>& split_positions, float threshold) {
 		std::vector<int> flags(split_positions.size() - 2, 0);
 
 		float min_stddev = std::numeric_limits<float>::max();
@@ -847,8 +932,8 @@ namespace fs {
 				if (flags[i] == 1) cnt_ones++;
 			}
 
-			// valid only if 1s are more than half
-			if ((float)(cnt_ones + 2) / split_positions.size() > 0.5) {
+			// valid only if 1s are more than 50%
+			if ((float)(cnt_ones + 2) / split_positions.size() > threshold) {
 				// compute the distances between split lines
 				std::vector<float> intervals;
 				float prev_pos = split_positions[0];
@@ -1372,6 +1457,27 @@ namespace fs {
 
 		return E;
 	}
+
+	bool isLocalMinimum(const cv::Mat& mat, int index, float threshold) {
+		float origin_value = mat.at<float>(index, 0);
+
+		// check upward
+		for (int r = index - 1; r >= 0; --r) {
+			if (fabs(mat.at<float>(r, 0) - origin_value) > threshold) break;
+
+			if (mat.at<float>(r, 0) < origin_value) return false;
+		}
+
+		// check downward
+		for (int r = index; r < mat.rows; ++r) {
+			if (fabs(mat.at<float>(r, 0) - origin_value) > threshold) break;
+
+			if (mat.at<float>(r, 0) < origin_value) return false;
+		}
+
+		return true;
+	}
+
 
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// visualization

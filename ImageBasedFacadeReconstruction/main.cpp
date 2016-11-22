@@ -29,6 +29,7 @@ int main() {
 
 	boost::filesystem::path dir("../testdata/");
 	//boost::filesystem::path dir("../testdata2/");
+	boost::filesystem::path dir_curve("../curve/");
 	boost::filesystem::path dir_subdiv("../subdivision/");
 	boost::filesystem::path dir_win("../windows/");
 	boost::filesystem::path dir_results("../results/");
@@ -39,6 +40,18 @@ int main() {
 
 		// read an image
 		cv::Mat img = cv::imread(dir.string() + it->path().filename().string());
+
+		{
+			cv::Mat_<float> Ver;
+			cv::Mat_<float> Hor;
+			fs::computeVerAndHor2(img, Ver, Hor);
+
+			std::ofstream out(dir_curve.string() + it->path().filename().string() + ".txt", std::ofstream::out);
+			for (int i = 0; i < Ver.rows; ++i) {
+				out << Ver(i, 0) << std::endl;
+			}
+			out.close();
+		}
 
 
 		// edge images
@@ -63,8 +76,8 @@ int main() {
 			// Facadeのsplit linesを求める
 			std::vector<float> x_split;
 			std::vector<float> y_split;
-			fs::getSplitLines(Ver, 4, y_split);
-			fs::getSplitLines(Hor, 4, x_split);
+			fs::getSplitLines(Ver, 4, 0.5, y_split);
+			fs::getSplitLines(Hor, 4, 0.5, x_split);
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
 
