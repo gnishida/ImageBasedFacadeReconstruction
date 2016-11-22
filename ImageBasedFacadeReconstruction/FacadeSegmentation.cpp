@@ -25,7 +25,7 @@ namespace fs {
 
 		//getSplitLines(Hor, 3, 0.5, x_split);
 		//refineSplitLines(x_split);
-		getSplitLines2(Hor, 0.1, x_split);
+		getSplitLines2(Hor, 0.2, x_split);
 		refineSplitLines2(x_split, 0.2);
 
 		// convert to grayscale
