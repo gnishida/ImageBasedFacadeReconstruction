@@ -76,13 +76,11 @@ int main() {
 			// Facadeのsplit linesを求める
 			std::vector<float> x_split;
 			std::vector<float> y_split;
-			fs::getSplitLines(Ver, 4, 0.5, y_split);
-			fs::getSplitLines(Hor, 4, 0.5, x_split);
+			fs::getSplitLines(Ver, 0.2, y_split);
+			fs::getSplitLines(Hor, 0.2, x_split);
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
-
 		}
-
 
 
 
