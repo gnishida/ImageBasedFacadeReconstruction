@@ -20,7 +20,6 @@
 #include "FacadeSegmentation.h"
 #include <list>
 #include <boost/filesystem.hpp>
-#include "EdgeDetection.h"
 
 int main() {
 	bool align_windows = false;
