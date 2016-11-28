@@ -26,6 +26,18 @@ int main() {
 	bool resize = false;
 	cv::Size output_size(227, 227);
 
+	// read the #floors file
+	std::ifstream in("floors.txt");
+	std::map<std::string, int> num_floors;
+	while (!in.eof()) {
+		std::string filename;
+		int num;
+		in >> filename >> num;
+		num_floors[filename] = num;
+
+		if (filename == "") break;
+	}
+
 	boost::filesystem::path dir("../testdata/");
 	//boost::filesystem::path dir("../testdata2/");
 	boost::filesystem::path dir_subdiv("../subdivision/");
@@ -50,13 +62,30 @@ int main() {
 
 		// draw grad curve
 		{
+			// compute the average floor height
+			float avg_floor_height = img.rows / num_floors[it->path().filename().string()];
+
+			int kernel_size = avg_floor_height / 6;
+			if (kernel_size % 2 == 0) kernel_size++;
+
+			// blur the image according to the average floor height
+			cv::Mat img2;
+			if (kernel_size > 1) {
+				cv::GaussianBlur(img, img2, cv::Size(kernel_size, kernel_size), kernel_size);
+			}
+			else {
+				img2 = img.clone();
+			}
+
 			cv::Mat_<float> Ver;
 			cv::Mat_<float> Hor;
-			fs::computeVerAndHor2(img, Ver, Hor);
+			fs::computeVerAndHor2(img2, Ver, Hor);
 
 			// smoothing
-			cv::blur(Ver, Ver, cv::Size(11, 11));
-			cv::blur(Hor, Hor, cv::Size(11, 11));
+			if (kernel_size > 1) {
+				cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
+				cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
+			}
 
 			// Facadeのsplit linesを求める
 			std::vector<float> x_split;
@@ -66,14 +95,12 @@ int main() {
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
 		}
-
-
-
+				
 		// subdivide the facade into tiles and windows
 		std::vector<float> x_split;
 		std::vector<float> y_split;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(img, align_windows, y_split, x_split, win_rects);
+		fs::subdivideFacade(img, num_floors[it->path().filename().string()], align_windows, y_split, x_split, win_rects);
 
 		std::cout << it->path().filename().string() << std::endl;
 

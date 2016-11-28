@@ -5,22 +5,56 @@
 
 namespace fs {
 
-	void subdivideFacade(const cv::Mat& img, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects) {
+	void subdivideFacade(const cv::Mat& img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects) {
+		// compute the average floor height
+		float avg_floor_height = img.rows / num_floors;
+
+		int kernel_size = avg_floor_height / 6;
+		if (kernel_size % 2 == 0) kernel_size++;
+
+		// blur the image according to the average floor height
+		cv::Mat img2;
+		if (kernel_size > 1) {
+			cv::GaussianBlur(img, img2, cv::Size(kernel_size, kernel_size), kernel_size);
+		}
+		else {
+			img2 = img.clone();
+		}
+
 		// compute Ver(y) and Hor(x)
 		cv::Mat_<float> Ver;
 		cv::Mat_<float> Hor;
-		computeVerAndHor2(img, Ver, Hor);
+		computeVerAndHor2(img2, Ver, Hor);
 
 		// smoothing
-		cv::blur(Ver, Ver, cv::Size(11, 11));
-		cv::blur(Hor, Hor, cv::Size(11, 11));
+		if (kernel_size > 1) {
+			cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
+			cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
+		}
 
-		// Facadeのsplit linesを求める
-		getSplitLines(Ver, 0.2, y_split);
-		refineSplitLines(y_split, 0.3);
-		//distributeSplitLines(y_split, 0.7);
+		float min_diff = std::numeric_limits<float>::max();
+		float min_thr;
+		for (float thr = 0.3; thr > 0.05; thr -= 0.05) {
+			// Facadeのsplit linesを求める
+			std::vector<float> y_split_candidate;
+			getSplitLines(Ver, thr, y_split_candidate);
+			refineSplitLines(y_split_candidate, avg_floor_height, 0.45);
 
-		getSplitLines(Hor, 0.2, x_split);
+			float diff = 0;
+			for (int s = 0; s < y_split_candidate.size() - 1; ++s) {
+				float h = y_split_candidate[s + 1] - y_split_candidate[s];
+				diff += (h - avg_floor_height) * (h - avg_floor_height);
+			}
+			diff /= y_split_candidate.size() - 1;
+			if (diff < min_diff) {
+				min_diff = diff;
+				y_split = y_split_candidate;
+				min_thr = thr;
+			}
+		}
+		//std::cout << "thresh: " << min_thr << std::endl;
+
+		getSplitLines(Hor, min_thr, x_split);
 		refineSplitLines(x_split, 0.2);
 
 		// convert to grayscale
@@ -52,7 +86,7 @@ namespace fs {
 				cv::Mat tile(gray_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 				cv::Mat tile_edges(edge_img, cv::Rect(x_split[j], y_split[i], x_split[j + 1] - x_split[j], y_split[i + 1] - y_split[i]));
 
-				if (subdivideTile(tile, tile_edges, 10, 3, win_rects[i][j])) {
+				if (subdivideTile(tile, tile_edges, 1, 1, win_rects[i][j])) {
 					window_count++;
 				}
 
@@ -299,7 +333,7 @@ namespace fs {
 		cvutils::grayScale(img, grayImg);
 
 		// smoothing
-		cv::GaussianBlur(grayImg, grayImg, cv::Size(5, 5), 5, 5);
+		//cv::GaussianBlur(grayImg, grayImg, cv::Size(5, 5), 5, 5);
 
 		// compute gradient magnitude
 		cv::Mat sobelx;
@@ -731,6 +765,8 @@ namespace fs {
 	* 与えられた関数の極小値を使ってsplit lineを決定する。
 	*/
 	void getSplitLines(const cv::Mat_<float>& val, float threshold, std::vector<float>& split_positions) {
+		split_positions.clear();
+
 		cv::Mat_<float> mat = val.clone();
 		if (mat.rows == 1) {
 			mat = mat.t();
@@ -766,6 +802,34 @@ namespace fs {
 			else {
 				split_positions.push_back(mat.rows);
 			}
+		}
+	}
+
+	// 間隔が狭すぎる場合は、分割して隣接領域にマージする
+	void refineSplitLines(std::vector<float>& split_positions, float avg_size, float threshold) {
+		while (true) {
+			bool updated = false;
+			for (int i = 0; i < split_positions.size() - 1;) {
+				float size = split_positions[i + 1] - split_positions[i];
+				if (size < avg_size * threshold) {
+					if (i == 0) {
+						split_positions.erase(split_positions.begin() + 1);
+					}
+					else if (i == split_positions.size() - 2) {
+						split_positions.erase(split_positions.begin() + split_positions.size() - 2);
+					}
+					else {
+						split_positions[i] = (split_positions[i + 1] + split_positions[i]) * 0.5;
+						split_positions.erase(split_positions.begin() + i + 1);
+					}
+					updated = true;
+				}
+				else {
+					i++;
+				}
+			}
+
+			if (!updated) break;
 		}
 	}
 

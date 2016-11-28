@@ -20,7 +20,7 @@ namespace fs {
 		WindowPos(int left, int top, int right, int bottom) : left(left), top(top), right(right), bottom(bottom), valid(VALID) {}
 	};
 
-	void subdivideFacade(const cv::Mat& img, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
+	void subdivideFacade(const cv::Mat& img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
 	float MI(const cv::Mat& R1, const cv::Mat& R2);
 	void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, const std::pair<int, int>& h_range);
 	void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, const std::pair<int, int>& w_range);
@@ -32,6 +32,7 @@ namespace fs {
 	void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver, float min_interval, float max_interval, std::vector<int>& y_split);
 	void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, std::vector<int>& x_split);
 	void getSplitLines(const cv::Mat_<float>& mat, float threshold, std::vector<float>& split_positions);
+	void refineSplitLines(std::vector<float>& split_positions, float avg_size, float threshold);
 	void refineSplitLines(std::vector<float>& split_positions, float threshold);
 	void distributeSplitLines(std::vector<float>& split_positions, float threshold);
 	void refine(std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& winpos, float threshold);
