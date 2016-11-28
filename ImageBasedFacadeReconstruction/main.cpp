@@ -27,6 +27,18 @@ int main() {
 	bool resize = false;
 	cv::Size output_size(227, 227);
 
+	// read the #floors file
+	std::ifstream in("floors.txt");
+	std::map<std::string, int> num_floors;
+	while (!in.eof()) {
+		std::string filename;
+		int num;
+		in >> filename >> num;
+		num_floors[filename] = num;
+
+		if (filename == "") break;
+	}
+
 	boost::filesystem::path dir("../testdata/");
 	//boost::filesystem::path dir("../testdata2/");
 	boost::filesystem::path dir_curve("../curve/");
@@ -38,9 +50,12 @@ int main() {
 	for (auto it = boost::filesystem::directory_iterator(dir); it != boost::filesystem::directory_iterator(); ++it) {
 		if (boost::filesystem::is_directory(it->path())) continue;
 
+		std::cout << it->path().filename().string() << std::endl;
+
 		// read an image
 		cv::Mat img = cv::imread(dir.string() + it->path().filename().string());
 
+#if 0
 		{
 			cv::Mat_<float> Ver;
 			cv::Mat_<float> Hor;
@@ -81,17 +96,18 @@ int main() {
 
 			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_split, Hor, x_split, dir_grad.string() + it->path().filename().string(), 1);
 		}
-
+#endif
 
 
 		// subdivide the facade into tiles and windows
-		std::vector<float> x_split;
-		std::vector<float> y_split;
+		std::vector<float> x_splits;
+		std::vector<float> y_splits;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(img, align_windows, y_split, x_split, win_rects);
+		fs::subdivideFacade(img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
 
-		std::cout << it->path().filename().string() << std::endl;
+		fs::outputFacadeStructure(img, y_splits, x_splits, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 
+#if 0
 		// visualize the segmentation and save it to files
 		fs::outputFacadeStructure(img, y_split, x_split, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 		fs::outputFacadeAndWindows(img, y_split, x_split, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
@@ -113,6 +129,7 @@ int main() {
 			}
 		}
 		fs::outputWindows(y_split, x_split, win_rects, dir_results.string() + it->path().filename().string(), cv::Scalar(0, 0, 0), 1);
+#endif
 	}
 
 	return 0;
