@@ -6,166 +6,468 @@
 
 namespace fs {
 
-	void subdivideFacade(const cv::Mat& img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
+	void subdivideFacade(std::string filename, cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
 		// average floor height
 		float average_floor_height = (float)img.rows / num_floors;
 
-		// gray scale
-		cv::Mat gray_img;
-		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
+		// compute kernel size
+		int kernel_size = average_floor_height / 6;
+		if (kernel_size % 2 == 0) kernel_size++;
+		
+		// blur the image according to the average floor height
+		cv::Mat blurred_img;
+		if (kernel_size > 1) {
+			cv::GaussianBlur(img, blurred_img, cv::Size(kernel_size, kernel_size), kernel_size);
+		}
+		else {
+			blurred_img = img.clone();
+		}
+
+		// compute S_max and h_max
+		cv::Mat_<float> SV_max;
+		cv::Mat_<int> h_max;
+		fs::computeSV(blurred_img, SV_max, h_max, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5));
+		cv::Mat_<float> SH_max;
+		cv::Mat_<int> w_max;
+		fs::computeSH(blurred_img, SH_max, w_max, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4));
+
+		double min_SV, max_SV;
+		cv::minMaxLoc(SV_max, &min_SV, &max_SV);
+		double min_SH, max_SH;
+		cv::minMaxLoc(SH_max, &min_SH, &max_SH);
+
+
+		// compute IF
+		std::vector<std::vector<std::vector<cv::Point>>> mapping_data(img.rows);
+		for (int r = 0; r < img.rows; ++r) {
+			mapping_data[r].resize(img.cols);
+			for (int c = 0; c < img.cols; ++c) {
+				mapping_data[r][c].resize(1);
+				mapping_data[r][c][0] = cv::Point(c, r);
+			}
+		}
+		cv::Mat IF = img.clone();
+		computeIFV(IF, SV_max, h_max, max_SV, cv::Range(0, img.rows - 1), mapping_data);
+		computeIFH(IF, SH_max, w_max, max_SH, cv::Range(0, img.cols - 1), mapping_data);
+		cv::imwrite((std::string("../IF/") + filename).c_str(), IF);
 
 		// compute Ver and Hor
 		cv::Mat_<float> Ver, Hor;
-		computeVerAndHor2(gray_img, Ver, Hor);
+		computeVerAndHor2(IF, Ver, Hor);
 
-
-		double min_val, max_val;
-
-		// compute the S_max of vertical direction
-		cv::Mat_<float> SV_max, h_max;
-		computeSV(gray_img, SV_max, h_max, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5));
-		outputFacadeStructureV(img, SV_max, h_max, "testSV.png");
-		outputFacadeStructureV(img, Ver, h_max, "testVer.png");
-
-		// compute the tau_max
-		cv::minMaxLoc(SV_max, &min_val, &max_val);
-		//std::cout << "tau_max: " << max_val << std::endl;
-
-		// find the floor boundaries
-		y_splits = findSymmetry(Ver, SV_max, h_max, max_val, cv::Range(0, gray_img.rows - 1));
-		std::sort(y_splits.begin(), y_splits.end());
-		
-		y_splits.insert(y_splits.begin(), 0);
-		y_splits.push_back(gray_img.rows - 1);
-
-		for (int i = 0; i < y_splits.size(); ++i) {
-			std::cout << "y split: " << y_splits[i] << std::endl;
+		// smooth Ver and Hor
+		if (kernel_size > 1) {
+			cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
+			cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
 		}
 
+		getSplitLines(Ver, 0.1, y_splits);
+		getSplitLines(Hor, 0.1, x_splits);
+		outputImageWithHorizontalAndVerticalGraph(IF, Ver, y_splits, Hor, x_splits, std::string("../grad/") + filename, 1);
+		
+		/*
+		std::cout << "y_splits:" << std::endl;
+		for (int i = 0; i < y_splits.size(); ++i) {
+			std::cout << "  " << y_splits[i] << std::endl;
+		}
+		*/
 
-		// compute S_max of horizontal direction
-		cv::Mat_<float> SH_max, w_max;
-		computeSH(gray_img, SH_max, w_max, cv::Range(average_floor_height * 0.25, average_floor_height * 2.8));
-		outputFacadeStructureH(img, SH_max, w_max, "testSH.png");
-		outputFacadeStructureH(img, Hor, w_max, "testHor.png");
+		// recover the IF
+		std::vector<float> orig_y_splits = y_splits;
+		y_splits.clear();
+		for (int i = 0; i < orig_y_splits.size(); ++i) {
+			std::cout << "  y_split: " << orig_y_splits[i] << std::endl;
+			std::vector<cv::Point>& indices = mapping_data[orig_y_splits[i]][0];
+			for (int k = 0; k < indices.size(); ++k) {
+				std::cout << "       recovered: " << indices[k].y << std::endl;
+				y_splits.push_back(indices[k].y);
+			}
+		}
+		std::vector<float> orig_x_splits = x_splits;
+		x_splits.clear();
+		for (int i = 0; i < orig_x_splits.size(); ++i) {
+			std::vector<cv::Point>& indices = mapping_data[0][orig_x_splits[i]];
+			for (int k = 0; k < indices.size(); ++k) {
+				x_splits.push_back(indices[k].x);
+			}
+		}
+		outputFacadeStructure(img, y_splits, x_splits, std::string("../subdivision/") + filename, cv::Scalar(0, 255, 255), 1);
 
-		// compute the tau_max
-		cv::minMaxLoc(SH_max, &min_val, &max_val);
-		//std::cout << "tau_max: " << max_val << std::endl;
+	}
 
-		// find the column boundaries
-		x_splits = findSymmetry(Hor, SH_max, w_max, max_val, cv::Range(0, gray_img.cols - 1));
-		std::sort(x_splits.begin(), x_splits.end());
+	void computeIFV(cv::Mat& img, cv::Mat_<float> SV_max, cv::Mat_<int> h_max, float tau_max, cv::Range range, std::vector<std::vector<std::vector<cv::Point>>>& mapping_data) {
+		// find the largest SV_max
+		int max_r = -1;
+		float max_SV = 0;
+		int max_h = 0;
+		for (int r = range.start; r <= range.end; ++r) {
+			if (r - h_max(r) < range.start || r + h_max(r) >= range.end) continue;
+			if (SV_max(r) > max_SV) {
+				max_SV = SV_max(r);
+				max_h = h_max(r);
+				max_r = r;
+			}
+		}
+		
+		// stop here if there is no largest SV_max
+		if (max_r == -1) return;
 
-		x_splits.insert(x_splits.begin(), 0);
-		x_splits.push_back(gray_img.cols - 1);
+		// stop here if the largest SV_max < tau_max * 0.75
+		if (SV_max(max_r) < tau_max * 0.75) return;
 
-		for (int i = 0; i < x_splits.size(); ++i) {
-			std::cout << "x split: " << x_splits[i] << std::endl;
+		// shrink the image
+		shrinkImageV(img, SV_max, h_max, mapping_data, max_r, max_h, range);
+
+		// find the symmetry downward
+		{
+			int cur = max_r;
+			while (cur <= range.end) {
+				if (SV_max(cur) < tau_max * 0.75) break;
+				if (abs(h_max(cur) - max_h) >  max_h * 0.1) break;
+				if (cur + max_h >= range.end) break;
+
+				shrinkImageV(img, SV_max, h_max, mapping_data, cur, max_h, range);
+			}
+
+			computeIFV(img, SV_max, h_max, tau_max, cv::Range(cur, range.end), mapping_data);
+		}
+
+		// find the symmetry upward
+		{
+			int cur = max_r - h_max(max_r);
+			while (cur >= range.start) {
+				if (SV_max(cur) < tau_max * 0.75) break;
+				if (abs(h_max(cur) - max_h) >  max_h * 0.1) break;
+				if (cur - max_h < range.start) break;
+
+				shrinkImageV(img, SV_max, h_max, mapping_data, cur, max_h, range);
+				cur -= h_max(max_r);
+			}
+
+			computeIFV(img, SV_max, h_max, tau_max, cv::Range(range.start, cur), mapping_data);
 		}
 	}
 
-	std::vector<float> findSymmetry(cv::Mat_<float> Ver, cv::Mat_<float> SV_max, cv::Mat_<float> h_max, float tau_max, cv::Range range) {
+	void shrinkImageV(cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<int>& h_max, std::vector<std::vector<std::vector<cv::Point>>>& mapping_data, int r, int h, cv::Range& range) {
+		std::cout << "shrink image at " << r << ", height = " << h << std::endl;
+
+		cv::Mat orig_img = img.clone();
+
+		// split the image into regions
+		cv::Mat upper_region(orig_img, cv::Rect(0, 0, orig_img.cols, r - h));
+		cv::Mat lower_region(orig_img, cv::Rect(0, r + h, orig_img.cols, orig_img.rows - r - h));
+		cv::Mat overlapping1(orig_img, cv::Rect(0, r - h, orig_img.cols, h));
+		cv::Mat overlapping2(orig_img, cv::Rect(0, r, orig_img.cols, h));
+
+		img = cv::Mat(orig_img.rows - h, orig_img.cols, orig_img.type());
+
+		// shrink the image at r
+		cv::Mat overlapping = (overlapping1 + overlapping2) * 0.5;
+		cv::Mat roi_upper_region(img, cv::Rect(0, 0, orig_img.cols, upper_region.rows));
+		upper_region.copyTo(roi_upper_region);
+		cv::Mat roi_overlapping(img, cv::Rect(0, upper_region.rows, orig_img.cols, overlapping.rows));
+		overlapping.copyTo(roi_overlapping);
+		cv::Mat roi_lower_region(img, cv::Rect(0, upper_region.rows + overlapping.rows, orig_img.cols, lower_region.rows));
+		lower_region.copyTo(roi_lower_region);
+
+		// shrink SV_max and h_max at r
+		cv::Mat_<float> orig_SV_max = SV_max.clone();
+		cv::Mat_<float> orig_h_max = h_max.clone();
+		SV_max = cv::Mat_<float>(orig_SV_max.rows - h, 1);
+		h_max = cv::Mat_<int>(orig_h_max.rows - h, 1);
+		for (int i = 0; i < r - h; ++i) {
+			SV_max(i) = orig_SV_max(i);
+			h_max(i) = orig_h_max(i);
+		}
+		for (int i = r - h; i < r; ++i) {
+			SV_max(i) = std::min(orig_SV_max(i), orig_SV_max(i + h));
+			h_max(i) = std::min(orig_h_max(i), orig_h_max(i + h));
+		}
+		for (int i = r; i < SV_max.rows; ++i) {
+			SV_max(i) = orig_SV_max(i + h);
+			h_max(i) = orig_h_max(i + h);
+		}
+
+		// shrink the mapping data
+		std::vector<std::vector<std::vector<cv::Point>>> orig_mapping_data = mapping_data;
+		mapping_data.resize(orig_mapping_data.size() - h);
+
+		for (int i = 0; i < r - h; ++i) {
+			mapping_data[i] = orig_mapping_data[i];
+		}
+		for (int i = r - h; i < r; ++i) {
+			mapping_data[i].resize(orig_mapping_data[i].size());
+			for (int j = 0; j < mapping_data[i].size(); ++j) {
+				mapping_data[i][j] = orig_mapping_data[i][j];
+				mapping_data[i][j].insert(mapping_data[i][j].end(), orig_mapping_data[i + h][j].begin(), orig_mapping_data[i + h][j].end());
+			}
+		}
+		for (int i = r; i < mapping_data.size(); ++i) {
+			mapping_data[i] = orig_mapping_data[i + h];
+		}
+
+		// shrink the range
+		range.end -= h;
+
+		std::cout << "    resulting image size: " << img.cols << " x " << img.rows << std::endl;
+	}
+
+	void computeIFH(cv::Mat& img, cv::Mat_<float> SH_max, cv::Mat_<int> w_max, float tau_max, cv::Range range, std::vector<std::vector<std::vector<cv::Point>>>& mapping_data) {
+		// find the largest SH_max
+		int max_c = -1;
+		float max_SH = 0;
+		int max_w = 0;
+		for (int c = range.start; c <= range.end; ++c) {
+			if (c - w_max(c) < range.start || c + w_max(c) >= range.end) continue;
+			if (SH_max(c) > max_SH) {
+				max_SH = SH_max(c);
+				max_w = w_max(c);
+				max_c = c;
+			}
+		}
+
+		// stop here if there is no largest SH_max
+		if (max_c == -1) return;
+
+		// stop here if the largest SH_max < tau_max * 0.75
+		if (SH_max(max_c) < tau_max * 0.75) return;
+
+		// shrink the image
+		shrinkImageH(img, SH_max, w_max, mapping_data, max_c, max_w, range);
+
+		// find the symmetry downward
+		{
+			int cur = max_c;
+			while (cur <= range.end) {
+				if (SH_max(cur) < tau_max * 0.75) break;
+				if (abs(w_max(cur) - max_w) >  max_w * 0.1) break;
+				if (cur + max_w >= range.end) break;
+
+				shrinkImageH(img, SH_max, w_max, mapping_data, cur, max_w, range);
+			}
+
+			computeIFH(img, SH_max, w_max, tau_max, cv::Range(cur, range.end), mapping_data);
+		}
+
+		// find the symmetry upward
+		{
+			int cur = max_c - max_w;
+			while (cur >= range.start) {
+				if (SH_max(cur) < tau_max * 0.75) break;
+				if (abs(w_max(cur) - max_w) >  max_w * 0.1) break;
+				if (cur - max_w < range.start) break;
+
+				shrinkImageH(img, SH_max, w_max, mapping_data, cur, max_w, range);
+				cur -= max_w;
+			}
+
+			computeIFH(img, SH_max, w_max, tau_max, cv::Range(range.start, cur), mapping_data);
+		}
+	}
+
+	void shrinkImageH(cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<int>& w_max, std::vector<std::vector<std::vector<cv::Point>>>& mapping_data, int c, int w, cv::Range& range) {
+		std::cout << "shrink image at " << c << ", width = " << w << std::endl;
+
+		cv::Mat orig_img = img.clone();
+
+		// split the image into regions
+		cv::Mat left_region(orig_img, cv::Rect(0, 0, c - w, orig_img.rows));
+		cv::Mat right_region(orig_img, cv::Rect(c + w, 0, orig_img.cols - c - w, orig_img.rows));
+		cv::Mat overlapping1(orig_img, cv::Rect(c - w, 0, w, orig_img.rows));
+		cv::Mat overlapping2(orig_img, cv::Rect(c, 0, w, orig_img.rows));
+
+		img = cv::Mat(orig_img.rows, orig_img.cols - w, orig_img.type());
+
+		// shrink the image at r
+		cv::Mat overlapping = (overlapping1 + overlapping2) * 0.5;
+		cv::Mat roi_left_region(img, cv::Rect(0, 0, left_region.cols, orig_img.rows));
+		left_region.copyTo(roi_left_region);
+		cv::Mat roi_overlapping(img, cv::Rect(left_region.cols, 0, overlapping.cols, orig_img.rows));
+		overlapping.copyTo(roi_overlapping);
+		cv::Mat roi_right_region(img, cv::Rect(left_region.cols + overlapping.cols, 0, right_region.cols, orig_img.rows));
+		right_region.copyTo(roi_right_region);
+
+		// shrink SV_max and h_max at r
+		cv::Mat_<float> orig_SH_max = SH_max.clone();
+		cv::Mat_<float> orig_w_max = w_max.clone();
+		SH_max = cv::Mat_<float>(orig_SH_max.rows - w, 1);
+		w_max = cv::Mat_<int>(orig_w_max.rows - w, 1);
+		for (int i = 0; i < c - w; ++i) {
+			SH_max(i) = orig_SH_max(i);
+			w_max(i) = orig_w_max(i);
+		}
+		for (int i = c - w; i < c; ++i) {
+			SH_max(i) = std::min(orig_SH_max(i), orig_SH_max(i + w));
+			w_max(i) = std::min(orig_w_max(i), orig_w_max(i + w));
+		}
+		for (int i = c; i < SH_max.rows; ++i) {
+			SH_max(i) = orig_SH_max(i + w);
+			w_max(i) = orig_w_max(i + w);
+		}
+
+		// shrink the mapping data
+		std::vector<std::vector<std::vector<cv::Point>>> orig_mapping_data = mapping_data;
+		for (int i = 0; i < mapping_data.size(); ++i) {
+			mapping_data[i].resize(orig_mapping_data[i].size() - w);
+			for (int j = 0; j < c - w; ++j) {
+				mapping_data[i][j] = orig_mapping_data[i][j];
+			}
+			for (int j = c - w; j < c; ++j) {
+				mapping_data[i][j] = orig_mapping_data[i][j];
+				mapping_data[i][j].insert(mapping_data[i][j].end(), orig_mapping_data[i][j + w].begin(), orig_mapping_data[i][j + w].end());
+			}
+			for (int j = c; j < mapping_data[i].size(); ++j) {
+				mapping_data[i][j] = orig_mapping_data[i][j + w];
+			}
+		}
+
+		// shrink the range
+		range.end -= w;
+
+		std::cout << "    resulting image size: " << img.cols << " x " << img.rows << std::endl;
+	}
+
+
+	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, const std::vector<float>& S_max, const std::vector<int>& h_max, const std::vector<int>& min_Ver_indices, float tau_max, cv::Range range) {
 		std::vector<float> splits;
 
 		if (range.end - range.start <= 1) return splits;
 
-
-
-
-
-
-
-
-
-
-
-
-
-		
-		// find the max S
-		float max_val = 0;
-		int max_r = -1;
-		for (int r = range.start; r <= range.end; ++r) {
-			if (SV_max(r) > max_val && r - h_max(r) >= range.start && r + h_max(r) <= range.end) {
-				max_val = SV_max(r);
-				max_r = r;
+		// compute S_max and h_max at ys where Ver is local minimum
+		int best_r = -1;
+		float best_S;
+		int best_h;
+		for (int i = 0; i < min_Ver_indices.size(); ++i) {
+			int r = min_Ver_indices[i];
+			if (r - h_max[i] < range.start || r + h_max[i] > range.end) continue;
+			if (S_max[i] >= tau_max * 0.75) {
+				best_r = r;
+				best_S = S_max[i];
+				best_h = h_max[i];
+				break;
 			}
 		}
 
 		// stop here if no max S is found.
-		if (max_r == -1) return splits;
+		if (best_r == -1) return splits;
 
 		// if the max is less than tau_max * 0.75, stop finding symmetry
-		if (SV_max(max_r) < tau_max * 0.75) return splits;
-
-		// find the local minimum of Ver around max_r
-		float min_Ver1 = std::numeric_limits<float>::max();
-		int min_r1 = -1;
-		for (int r = max_r; r <= range.end; ++r) {
-			if (Ver(r) > min_Ver1) break;
-
-			if (Ver(r) < min_Ver1 && r - h_max(r) >= range.start && r + h_max(r) <= range.end) {
-				min_Ver1 = Ver(r);
-				min_r1 = r;
-			}
-		}
-		float min_Ver2 = std::numeric_limits<float>::max();
-		int min_r2 = -1;
-		for (int r = max_r; r >= range.start; --r) {
-			if (Ver(r) > min_Ver2) break;
-
-			if (Ver(r) < min_Ver2 && r - h_max(r) >= range.start && r + h_max(r) <= range.end) {
-				min_Ver2 = Ver(r);
-				min_r2 = r;
-			}
-		}
-		int min_r = -1;
-		if (min_Ver1 < min_Ver2) {
-			min_r = min_r1;
-		}
-		else {
-			min_r = min_r2;
-		}
-		
+		if (best_S < tau_max * 0.75) return splits;
+	
 		// add new split
-		splits.push_back(min_r);
-		std::cout << "new split line: " << min_r << std::endl;
-
-		int h = h_max(min_r);
+		splits.push_back(best_r);
+		std::cout << "new split line: " << best_r << std::endl;
 		
 		// find the symmetry downward
 		{
-			int cur = min_r + h;
+			int cur = best_r + best_h;
 			while (cur <= range.end) {
-				if (cur >= range.end) break;
-				if (SV_max(cur) < tau_max * 0.75) break;
-				if (abs(h_max(cur) - h) > h * 0.25) break;
+				float SV;
+				int h;
+				computeSV(img, cur, SV, h, h_range);
+				if (SV < tau_max * 0.75) break;
+				if (abs(h - best_h) >  best_h * 0.25) break;
 
 				splits.push_back(cur);
 				std::cout << "    add split line: " << cur << std::endl;
-				cur += h_max(cur);
+				cur += h;
 			}
 			splits.push_back(cur);
 
-			std::vector<float> new_splits = findSymmetry(Ver, SV_max, h_max, tau_max, cv::Range(cur, range.end));
+			std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, min_Ver_indices, tau_max, cv::Range(cur, range.end));
 			splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		}
 
 		// find the symmetry upward
 		{
-			int cur = min_r - h;
+			int cur = best_r - best_h;
 			while (cur >= range.start) {
-				if (SV_max(cur) < tau_max * 0.75) break;
-				if (abs(h_max(cur) - h) > h * 0.25) break;
+				float SV;
+				int h;
+				computeSV(img, cur, SV, h, h_range);
+				if (SV < tau_max * 0.75) break;
+				if (abs(h - best_h) >  best_h * 0.25) break;
 
 				splits.push_back(cur);
 				std::cout << "    add split line: " << cur << std::endl;
-				cur -= h_max(cur);
+				cur -= h;
 			}
 			splits.push_back(cur);
 
-			std::vector<float> new_splits = findSymmetry(Ver, SV_max, h_max, tau_max, cv::Range(range.start, cur));
+			std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, min_Ver_indices, tau_max, cv::Range(range.start, cur));
+			splits.insert(splits.end(), new_splits.begin(), new_splits.end());
+		}
+
+		return splits;
+	}
+
+	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, const std::vector<float>& S_max, const std::vector<int>& h_max, const std::vector<int>& min_Hor_indices, float tau_max, cv::Range range) {
+		std::vector<float> splits;
+
+		if (range.end - range.start <= 1) return splits;
+
+		// compute S_max and h_max at ys where Ver is local minimum
+		int best_r = -1;
+		float best_S;
+		int best_h;
+		for (int i = 0; i < min_Hor_indices.size(); ++i) {
+			int r = min_Hor_indices[i];
+			if (r - h_max[i] < range.start || r + h_max[i] > range.end) continue;
+			if (S_max[i] >= tau_max * 0.75) {
+				best_r = r;
+				best_S = S_max[i];
+				best_h = h_max[i];
+				break;
+			}
+		}
+
+		// stop here if no max S is found.
+		if (best_r == -1) return splits;
+
+		// if the max is less than tau_max * 0.75, stop finding symmetry
+		if (best_S < tau_max * 0.75) return splits;
+
+		// add new split
+		splits.push_back(best_r);
+		std::cout << "new split line: " << best_r << std::endl;
+
+		// find the symmetry downward
+		{
+			int cur = best_r + best_h;
+			while (cur <= range.end) {
+				float SH;
+				int h;
+				computeSH(img, cur, SH, h, h_range);
+				if (SH < tau_max * 0.75) break;
+				if (abs(h - best_h) >  best_h * 0.25) break;
+
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+				cur += h;
+			}
+			splits.push_back(cur);
+
+			std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, min_Hor_indices, tau_max, cv::Range(cur, range.end));
+			splits.insert(splits.end(), new_splits.begin(), new_splits.end());
+		}
+
+		// find the symmetry upward
+		{
+			int cur = best_r - best_h;
+			while (cur >= range.start) {
+				float SH;
+				int h;
+				computeSH(img, cur, SH, h, h_range);
+				if (SH < tau_max * 0.75) break;
+				if (abs(h - best_h) >  best_h * 0.25) break;
+
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+				cur -= h;
+			}
+			splits.push_back(cur);
+
+			std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, min_Hor_indices, tau_max, cv::Range(range.start, cur));
 			splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		}
 
@@ -180,6 +482,7 @@ namespace fs {
 	* @return			類似度
 	*/
 	float MI(const cv::Mat& R1, const cv::Mat& R2) {
+#if 1
 		cv::Mat_<float> Pab(256, 256, 0.0f);
 		cv::Mat_<float> Pa(256, 1, 0.0f);
 		cv::Mat_<float> Pb(256, 1, 0.0f);
@@ -226,7 +529,7 @@ namespace fs {
 		}
 
 		return result;
-
+#endif
 #if 0
 		cv::Mat norm_R1;
 		cv::Mat norm_R2;
@@ -243,7 +546,7 @@ namespace fs {
 	* @param h_max		h_max(y)
 	* @param h_range	range of h
 	*/
-	void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_max, const cv::Range& h_range) {
+	void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<int>& h_max, const cv::Range& h_range) {
 		SV_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 		h_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 
@@ -256,7 +559,7 @@ namespace fs {
 		printf("\n");
 	}
 
-	void computeSV(const cv::Mat& img, int r, float& SV_max, float& h_max, const cv::Range& h_range) {
+	void computeSV(const cv::Mat& img, int r, float& SV_max, int& h_max, const cv::Range& h_range) {
 		SV_max = 0;
 
 		for (int h = h_range.start; h <= h_range.end; ++h) {
@@ -281,7 +584,7 @@ namespace fs {
 	* @param w_max		w_max(x)
 	* @param w_range	range of w
 	*/
-	void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_max, const cv::Range& w_range) {
+	void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<int>& w_max, const cv::Range& w_range) {
 		SH_max = cv::Mat_<float>(img.cols, 1, 0.0f);
 		w_max = cv::Mat_<float>(img.cols, 1, 0.0f);
 
@@ -289,23 +592,26 @@ namespace fs {
 		for (int c = 0; c < img.cols; ++c) {
 			printf("\rcomputing c = %d/%d  ", c, img.cols);
 
-			cv::Mat_<float> SH(img.cols, 1, 0.0f);
-
-			for (int w = w_range.start; w <= w_range.end; ++w) {
-				if (c - w < 0 || c + w >= img.cols) continue;
-
-				cv::Mat R1 = img(cv::Rect(c, 0, w, img.rows));
-				cv::Mat R2 = img(cv::Rect(c - w, 0, w, img.rows));
-
-				SH(w) = MI(R1, R2);
-
-				if (SH(w) > SH_max(c)) {
-					SH_max(c) = SH(w);
-					w_max(c) = w;
-				}
-			}
+			computeSH(img, c, SH_max(c), w_max(c), w_range);
 		}
 		printf("\n");
+	}
+
+	void computeSH(const cv::Mat& img, int c, float& SH_max, int& w_max, const cv::Range& w_range) {
+		SH_max = 0;
+
+		for (int w = w_range.start; w <= w_range.end; ++w) {
+			if (c - w < 0 || c + w >= img.cols) continue;
+
+			cv::Mat R1 = img(cv::Rect(c, 0, w, img.rows));
+			cv::Mat R2 = img(cv::Rect(c - w, 0, w, img.rows));
+			float SH = MI(R1, R2);
+
+			if (SH > SH_max) {
+				SH_max = SH;
+				w_max = w;
+			}
+		}
 	}
 
 	/**
@@ -839,6 +1145,7 @@ namespace fs {
 			}
 		}
 
+		/*
 		// 両端処理
 		if (split_positions.size() == 0) {
 			split_positions.insert(split_positions.begin(), 0);
@@ -852,14 +1159,15 @@ namespace fs {
 			}
 		}
 
-		if (split_positions.back() < mat.rows) {
+		if (split_positions.back() < mat.rows - 1) {
 			if (split_positions.back() >= mat.rows - 5) {
-				split_positions.back() = mat.rows;
+				split_positions.back() = mat.rows - 1;
 			}
 			else {
-				split_positions.push_back(mat.rows);
+				split_positions.push_back(mat.rows - 1);
 			}
 		}
+		*/
 	}
 
 	// 間隔が狭すぎる場合は、分割して隣接領域にマージする
@@ -1140,20 +1448,18 @@ namespace fs {
 	}
 
 	bool isLocalMinimum(const cv::Mat& mat, int index, float threshold) {
-		float origin_value = mat.at<float>(index, 0);
+		float origin_value = mat.at<float>(index);
 
 		// check upward
 		for (int r = index - 1; r >= 0; --r) {
-			if (fabs(mat.at<float>(r, 0) - origin_value) > threshold) break;
-
-			if (mat.at<float>(r, 0) < origin_value) return false;
+			if (mat.at<float>(r) < origin_value) return false;
+			if (fabs(mat.at<float>(r) - origin_value) > threshold) break;
 		}
 
 		// check downward
-		for (int r = index; r < mat.rows; ++r) {
-			if (fabs(mat.at<float>(r, 0) - origin_value) > threshold) break;
-
-			if (mat.at<float>(r, 0) < origin_value) return false;
+		for (int r = index + 1; r < mat.rows; ++r) {
+			if (mat.at<float>(r) < origin_value) return false;
+			if (fabs(mat.at<float>(r) - origin_value) > threshold) break;
 		}
 
 		return true;
@@ -1163,8 +1469,14 @@ namespace fs {
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	// visualization
 
-	void outputFacadeStructure(const cv::Mat& img, const std::vector<float>& y_splits, const std::vector<float>& x_splits, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
-		cv::Mat result = img.clone();
+	void outputFacadeStructure(cv::Mat img, const std::vector<float>& y_splits, const std::vector<float>& x_splits, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
+		cv::Mat result;
+		if (img.channels() == 1) {
+			cv::cvtColor(img, result, cv::COLOR_GRAY2BGR);
+		}
+		else {
+			result = img.clone();
+		}
 
 		for (int i = 0; i < y_splits.size(); ++i) {
 			if (i < y_splits.size() - 1) {
@@ -1184,6 +1496,95 @@ namespace fs {
 				cv::line(result, cv::Point(x_splits[i] - 1, 0), cv::Point(x_splits[i] - 1, img.rows), lineColor, lineWidth);
 			}
 		}
+		cv::imwrite(filename, result);
+	}
+
+	void outputFacadeStructure(cv::Mat img, const cv::Mat_<float>& SV_max, const cv::Mat_<float>& Ver, const cv::Mat_<float>& h_max, const std::vector<float>& y_splits, const cv::Mat_<float>& SH_max, const cv::Mat_<float>& Hor, const cv::Mat_<float>& w_max, const std::vector<float>& x_splits, const std::string& filename, cv::Scalar lineColor, int lineWidth) {
+		if (img.channels() == 1) {
+			cv::cvtColor(img, img, cv::COLOR_GRAY2BGR);
+		}
+
+		double min_SV, max_SV;
+		double min_Ver, max_Ver;
+		double min_h, max_h;
+		double min_SH, max_SH;
+		double min_Hor, max_Hor;
+		double min_w, max_w;
+		cv::minMaxLoc(SV_max, &min_SV, &max_SV);
+		cv::minMaxLoc(Ver, &min_Ver, &max_Ver);
+		cv::minMaxLoc(h_max, &min_h, &max_h);
+		cv::minMaxLoc(SH_max, &min_SH, &max_SH);
+		cv::minMaxLoc(Hor, &min_Hor, &max_Hor);
+		cv::minMaxLoc(h_max, &min_w, &max_w);
+
+		int graphSizeV = img.rows * 0.25;
+		int marginV = graphSizeV * 0.2;
+		int graphSizeH = std::max(80.0, img.rows * 0.25);
+		int marginH = graphSizeH * 0.2;
+		cv::Mat result(img.rows + graphSizeH * 2 + max_w + marginH * 4, img.cols + graphSizeV * 2 + max_h + marginV * 4, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// draw SV_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + marginV + (SV_max(r) - min_SV) / (max_SV - min_SV) * graphSizeV;
+			int x2 = img.cols + marginV + (SV_max(r + 1) - min_SV) / (max_SV - min_SV) * graphSizeV;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Ver
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSizeV + marginV * 2 + (Ver(r) - min_Ver) / (max_Ver - min_Ver) * graphSizeV;
+			int x2 = img.cols + graphSizeV + marginV * 2 + (Ver(r + 1) - min_Ver) / (max_Ver - min_Ver) * graphSizeV;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw h_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSizeV * 2 + marginV * 3 + h_max(r);
+			int x2 = img.cols + graphSizeV * 2 + marginV * 3 + h_max(r + 1);
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw y splits
+		for (int i = 0; i < y_splits.size(); ++i) {
+			cv::line(result, cv::Point(0, y_splits[i]), cv::Point(img.cols, y_splits[i]), cv::Scalar(0, 255, 255), 3);
+		}
+
+		// draw SH_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + marginH + (SH_max(c) - min_SH) / (max_SH - min_SH) * graphSizeH;
+			int y2 = img.rows + marginH + (SH_max(c + 1) - min_SH) / (max_SH - min_SH) * graphSizeH;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Hor
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSizeH + marginH * 2 + (Hor(c) - min_Hor) / (max_Hor - min_Hor) * graphSizeH;
+			int y2 = img.rows + graphSizeH + marginH * 2 + (Hor(c + 1) - min_Hor) / (max_Hor - min_Hor) * graphSizeH;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw w_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSizeH * 2 + marginH * 3 + w_max(c);
+			int y2 = img.rows + graphSizeH * 2 + marginH * 3 + w_max(c + 1);
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw x splits
+		for (int i = 0; i < x_splits.size(); ++i) {
+			cv::line(result, cv::Point(x_splits[i], 0), cv::Point(x_splits[i], img.rows), cv::Scalar(0, 255, 255), 3);
+		}
+
 		cv::imwrite(filename, result);
 	}
 
@@ -1326,8 +1727,8 @@ namespace fs {
 
 		// draw horizontal graph
 		for (int c = 0; c < img.cols - 1; ++c) {
-			int y1 = img.rows + (cvutils::get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
-			int y2 = img.rows + (cvutils::get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y1 = img.rows + (cvutils::get(hor, c, 0) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (cvutils::get(hor, c + 1, 0) - min_hor) / (max_hor - min_hor) * graphSize;
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
 		}
@@ -1377,6 +1778,97 @@ namespace fs {
 		cv::imwrite(filename, result);
 	}
 
+	void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& Ver, const cv::Mat_<float>& h_max, const std::string& filename) {
+		double min_S, max_S;
+		double min_Ver, max_Ver;
+		double min_h, max_h;
+		cv::minMaxLoc(S_max, &min_S, &max_S);
+		cv::minMaxLoc(Ver, &min_Ver, &max_Ver);
+		cv::minMaxLoc(h_max, &min_h, &max_h);
+		
+		int graphSize = img.rows * 0.25;
+		int margin = graphSize * 0.2;
+		cv::Mat result(img.rows, img.cols + graphSize * 2 + max_h + margin * 4, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// draw S_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + margin + (S_max(r) - min_S) / (max_S - min_S) * graphSize;
+			int x2 = img.cols + margin + (S_max(r + 1) - min_S) / (max_S - min_S) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Ver
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSize + margin * 2 + (Ver(r) - min_Ver) / (max_Ver - min_Ver) * graphSize;
+			int x2 = img.cols + graphSize + margin * 2 + (Ver(r + 1) - min_Ver) / (max_Ver - min_Ver) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw h_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSize * 2 + margin * 3 + h_max(r);
+			int x2 = img.cols + graphSize * 2 + margin * 3 + h_max(r + 1);
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
+	void outputFacadeStructureV(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& Ver, const cv::Mat_<float>& h_max, const std::vector<float>& y_splits, const std::string& filename) {
+		double min_S, max_S;
+		double min_Ver, max_Ver;
+		double min_h, max_h;
+		cv::minMaxLoc(S_max, &min_S, &max_S);
+		cv::minMaxLoc(Ver, &min_Ver, &max_Ver);
+		cv::minMaxLoc(h_max, &min_h, &max_h);
+
+		int graphSize = img.rows * 0.25;
+		int margin = graphSize * 0.2;
+		cv::Mat result(img.rows, img.cols + graphSize * 2 + max_h + margin * 4, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// draw S_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + margin + (S_max(r) - min_S) / (max_S - min_S) * graphSize;
+			int x2 = img.cols + margin + (S_max(r + 1) - min_S) / (max_S - min_S) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Ver
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSize + margin * 2 + (Ver(r) - min_Ver) / (max_Ver - min_Ver) * graphSize;
+			int x2 = img.cols + graphSize + margin * 2 + (Ver(r + 1) - min_Ver) / (max_Ver - min_Ver) * graphSize;
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw h_max
+		for (int r = 0; r < img.rows - 1; ++r) {
+			int x1 = img.cols + graphSize * 2 + margin * 3 + h_max(r);
+			int x2 = img.cols + graphSize * 2 + margin * 3 + h_max(r + 1);
+
+			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw y splits
+		for (int i = 0; i < y_splits.size(); ++i) {
+			cv::line(result, cv::Point(0, y_splits[i]), cv::Point(img.cols, y_splits[i]), cv::Scalar(0, 255, 255), 3);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
 	void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& w_max, const std::string& filename) {
 		float max_S = cvutils::max(S_max);
 		float min_S = cvutils::min(S_max);
@@ -1405,6 +1897,97 @@ namespace fs {
 			int y2 = img.rows + graphSize + margin * 2 + w_max(c + 1);
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
+	void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& Hor, const cv::Mat_<float>& w_max, const std::string& filename) {
+		double min_S, max_S;
+		double min_Hor, max_Hor;
+		double min_w, max_w;
+		cv::minMaxLoc(S_max, &min_S, &max_S);
+		cv::minMaxLoc(Hor, &min_Hor, &max_Hor);
+		cv::minMaxLoc(w_max, &min_w, &max_w);
+
+		int graphSize = std::max(80.0, img.rows * 0.25);
+		int margin = graphSize * 0.2;
+		cv::Mat result(img.rows + graphSize * 2 + max_w + margin * 4, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// draw S_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + margin + (S_max(c) - min_S) / (max_S - min_S) * graphSize;
+			int y2 = img.rows + margin + (S_max(c + 1) - min_S) / (max_S - min_S) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Hor
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSize + margin * 2 + (Hor(c) - min_Hor) / (max_Hor - min_Hor) * graphSize;
+			int y2 = img.rows + graphSize + margin * 2 + (Hor(c + 1) - min_Hor) / (max_Hor - min_Hor) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw w_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSize * 2 + margin * 3 + w_max(c);
+			int y2 = img.rows + graphSize * 2 + margin * 3 + w_max(c + 1);
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		cv::imwrite(filename, result);
+	}
+
+	void outputFacadeStructureH(const cv::Mat& img, const cv::Mat_<float>& S_max, const cv::Mat_<float>& Hor, const cv::Mat_<float>& w_max, const std::vector<float>& x_splits, const std::string& filename) {
+		double min_S, max_S;
+		double min_Hor, max_Hor;
+		double min_w, max_w;
+		cv::minMaxLoc(S_max, &min_S, &max_S);
+		cv::minMaxLoc(Hor, &min_Hor, &max_Hor);
+		cv::minMaxLoc(w_max, &min_w, &max_w);
+
+		int graphSize = std::max(80.0, img.rows * 0.25);
+		int margin = graphSize * 0.2;
+		cv::Mat result(img.rows + graphSize * 2 + max_w + margin * 4, img.cols, CV_8UC3, cv::Scalar(255, 255, 255));
+
+		// copy img to result
+		cv::Mat roi(result, cv::Rect(0, 0, img.cols, img.rows));
+		img.copyTo(roi);
+
+		// draw S_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + margin + (S_max(c) - min_S) / (max_S - min_S) * graphSize;
+			int y2 = img.rows + margin + (S_max(c + 1) - min_S) / (max_S - min_S) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw Hor
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSize + margin * 2 + (Hor(c) - min_Hor) / (max_Hor - min_Hor) * graphSize;
+			int y2 = img.rows + graphSize + margin * 2 + (Hor(c + 1) - min_Hor) / (max_Hor - min_Hor) * graphSize;
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw w_max
+		for (int c = 0; c < img.cols - 1; ++c) {
+			int y1 = img.rows + graphSize * 2 + margin * 3 + w_max(c);
+			int y2 = img.rows + graphSize * 2 + margin * 3 + w_max(c + 1);
+
+			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), cv::Scalar(0, 0, 0), 1, cv::LINE_8);
+		}
+
+		// draw x splits
+		for (int i = 0; i < x_splits.size(); ++i) {
+			cv::line(result, cv::Point(x_splits[i], 0), cv::Point(x_splits[i], img.rows), cv::Scalar(0, 255, 255), 3);
 		}
 
 		cv::imwrite(filename, result);

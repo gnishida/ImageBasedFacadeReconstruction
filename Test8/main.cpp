@@ -519,6 +519,7 @@ void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_m
 	SV_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 	h_max = cv::Mat_<float>(img.rows, 1, 0.0f);
 
+#if 0
 	ifstream in_SV_max("SV_max.txt");
 	ifstream in_h("h_max.txt");
 	if (in_SV_max.good() && in_h.good()) {
@@ -528,6 +529,7 @@ void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_m
 		h_max = cvutils::read("h_max.txt");
 	}
 	else {
+#endif
 		printf("computing");
 		for (int r = 0; r < img.rows; ++r) {
 			printf("\rcomputing r = %d/%d  ", r, img.rows);
@@ -549,11 +551,12 @@ void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<float>& h_m
 		}
 		printf("\n");
 
+#if 0
 		// output SV_max(x) and h_max(x)
 		cvutils::write("SV_max.txt", SV_max);
 		cvutils::write("h_max.txt", h_max);
 	}
-
+#endif
 
 	////////////////////////////////////////////////////////////////////////
 	// DEBUG
@@ -624,6 +627,7 @@ void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_m
 	SH_max = cv::Mat_<float>(1, img.cols, 0.0f);
 	w_max = cv::Mat_<float>(1, img.cols, 0.0f);
 
+#if 0
 	ifstream in_SH("SH_max.txt");
 	ifstream in_w("w_max.txt");
 	if (in_SH.good() && in_w.good()) {
@@ -633,6 +637,7 @@ void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_m
 		w_max = cvutils::read("w_max.txt");
 	}
 	else {
+#endif
 		printf("computing");
 		for (int c = 0; c < img.cols; ++c) {
 			printf("\rcomputing c = %d/%d  ", c, img.cols);
@@ -655,11 +660,12 @@ void computeSH(const cv::Mat& img, cv::Mat_<float>& SH_max, cv::Mat_<float>& w_m
 		}
 		printf("\n");
 
+#if 0
 		// output SH_max(x) and w_max(x)
 		cvutils::write("SH_max.txt", SH_max);
 		cvutils::write("w_max.txt", w_max);
 	}
-
+#endif
 
 	////////////////////////////////////////////////////////////////////////
 	// DEBUG
@@ -1332,7 +1338,7 @@ void subdivideFacade(const cv::Mat& img) {
 	// vertical split
 	cv::Mat_<float> SV_max;
 	cv::Mat_<float> h_max;
-	computeSV(grayImg, SV_max, h_max, make_pair(10, 40));
+	computeSV(grayImg, SV_max, h_max, make_pair(3, grayImg.rows));
 
 	// visualize SV_max(y) and h_max(y)
 	outputFacadeStructureV(img, SV_max, h_max, "SV_max.png", 1);
@@ -1344,7 +1350,7 @@ void subdivideFacade(const cv::Mat& img) {
 	// horizontal split
 	cv::Mat_<float> SH_max;
 	cv::Mat_<float> w_max;
-	computeSH(grayImg, SH_max, w_max, make_pair(10, 40));
+	computeSH(grayImg, SH_max, w_max, make_pair(3, grayImg.cols));
 
 	// visualize SH_max(x) and w_max(x)
 	outputFacadeStructureH(img, SH_max, w_max, "SH_max.png", 1);
@@ -1432,8 +1438,8 @@ void subdivideFacade(const cv::Mat& img) {
 }
 
 int main() {
-	//cv::Mat img = cv::imread("../facade_small/facade2.png");
-	cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade4.png");
+	cv::Mat img = cv::imread("../testdata/50.png");
+	//cv::Mat img = cv::imread("\\\\matrix.cs.purdue.edu\\cgvlab\\gen\\meeting\\2016\\20160531\\facade_images\\facade4.png");
 
 	subdivideFacade(img);
 
