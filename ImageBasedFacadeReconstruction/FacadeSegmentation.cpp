@@ -2,7 +2,6 @@
 #include "CVUtils.h"
 #include "Utils.h"
 #include <fstream>
-#include "EdgeDetection.h"
 
 namespace fs {
 

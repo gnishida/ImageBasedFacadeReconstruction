@@ -33,12 +33,6 @@
     <ClCompile Include="FacadeSegmentation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="EdgeDetection.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="HoughTransform.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CVUtils.h">
@@ -48,12 +42,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="FacadeSegmentation.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="EdgeDetection.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="HoughTransform.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
