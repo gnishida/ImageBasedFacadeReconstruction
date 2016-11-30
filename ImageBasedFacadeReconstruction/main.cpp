@@ -89,11 +89,12 @@ int main() {
 		std::vector<float> x_splits;
 		std::vector<float> y_splits;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(it->path().filename().string(), img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
+		fs::subdivideFacade(img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
 
-
-
-		// window images
+		// subdivision image
+		fs::outputFacadeStructure(img, y_splits, x_splits, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
+		
+		// window image
 		fs::outputFacadeAndWindows(img, y_splits, x_splits, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 
 	}

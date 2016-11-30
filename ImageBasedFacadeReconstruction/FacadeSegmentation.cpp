@@ -5,7 +5,7 @@
 
 namespace fs {
 
-	void subdivideFacade(std::string filename, cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
+	void subdivideFacade(cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
 		// gray scale
 		cv::Mat gray_img;
 		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);

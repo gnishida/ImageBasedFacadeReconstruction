@@ -20,7 +20,7 @@ namespace fs {
 		WindowPos(int left, int top, int right, int bottom) : left(left), top(top), right(right), bottom(bottom), valid(VALID) {}
 	};
 
-	void subdivideFacade(std::string filename, cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
+	void subdivideFacade(cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
 	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
 	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
 	void findMaxSAroundLocalMinimumVer(cv::Mat img, cv::Mat_<float> Ver, cv::Range range, cv::Range h_range, float& S_max, int& best_h, int& best_r);
