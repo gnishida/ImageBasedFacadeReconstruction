@@ -56,8 +56,8 @@ int main() {
 		cv::Mat img = cv::imread(dir.string() + it->path().filename().string());
 
 		// gray scale
-		cv::Mat gray_img;
-		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
+		//cv::Mat gray_img;
+		//cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 
 #if 0
 		{
@@ -90,71 +90,13 @@ int main() {
 		std::vector<float> x_splits;
 		std::vector<float> y_splits;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(it->path().filename().string(), gray_img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
-
-#if 0
-		fs::outputFacadeStructure(img, y_splits, x_splits, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
-
-		// draw grad curve
-		{
-			// average floor height
-			float average_floor_height = (float)img.rows / num_floors[it->path().filename().string()];
-
-			// compute kernel size
-			int kernel_size = average_floor_height / 6;
-			if (kernel_size % 2 == 0) kernel_size++;
-
-			// blur the image according to the average floor height
-			if (kernel_size > 1) {
-				cv::GaussianBlur(gray_img, gray_img, cv::Size(kernel_size, kernel_size), kernel_size);
-			}
-
-			cv::Mat_<float> SV_max;
-			cv::Mat_<int> h_max;
-			fs::computeSV(gray_img, SV_max, h_max, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5));
-			cv::Mat_<float> SH_max;
-			cv::Mat_<int> w_max;
-			fs::computeSH(gray_img, SH_max, w_max, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4));
+		fs::subdivideFacade(it->path().filename().string(), img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
 
 
-			cv::Mat_<float> Ver;
-			cv::Mat_<float> Hor;
-			fs::computeVerAndHor2(gray_img, Ver, Hor);
 
-			// smooth Ver and Hor
-			if (kernel_size > 1) {
-				cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
-				cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
-			}
+		// window images
+		fs::outputFacadeAndWindows(img, y_splits, x_splits, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 
-			fs::outputFacadeStructure(img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, dir_grad.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
-		}
-#endif
-
-
-#if 0
-		// visualize the segmentation and save it to files
-		fs::outputFacadeStructure(img, y_split, x_split, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
-		fs::outputFacadeAndWindows(img, y_split, x_split, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
-
-		if (resize) {
-			for (int i = 0; i < win_rects.size(); ++i) {
-				for (int j = 0; j < win_rects[i].size(); ++j) {
-					win_rects[i][j].left = win_rects[i][j].left * output_size.width / img.cols;
-					win_rects[i][j].right = win_rects[i][j].right * output_size.width / img.cols;
-					win_rects[i][j].top = win_rects[i][j].top * output_size.height / img.rows;
-					win_rects[i][j].bottom = win_rects[i][j].bottom * output_size.height / img.rows;
-				}
-			}
-			for (int i = 0; i < x_split.size(); ++i) {
-				x_split[i] = x_split[i] * output_size.width / img.cols;
-			}
-			for (int i = 0; i < y_split.size(); ++i) {
-				y_split[i] = y_split[i] * output_size.height / img.rows;
-			}
-		}
-		fs::outputWindows(y_split, x_split, win_rects, dir_results.string() + it->path().filename().string(), cv::Scalar(0, 0, 0), 1);
-#endif
 	}
 
 	return 0;

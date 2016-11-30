@@ -7,7 +7,9 @@
 namespace fs {
 
 	void subdivideFacade(std::string filename, cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
-		cv::Mat orig_img = img.clone();
+		// gray scale
+		cv::Mat gray_img;
+		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 		
 		// average floor height
 		float average_floor_height = (float)img.rows / num_floors;
@@ -17,13 +19,17 @@ namespace fs {
 		if (kernel_size % 2 == 0) kernel_size++;
 
 		// blur the image according to the average floor height
+		cv::Mat blurred_gray_img;
 		if (kernel_size > 1) {
-			cv::GaussianBlur(img, img, cv::Size(kernel_size, kernel_size), kernel_size);
+			cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size, kernel_size), kernel_size);
+		}
+		else {
+			blurred_gray_img = gray_img.clone();
 		}
 
 		// compute Ver and Hor
 		cv::Mat_<float> Ver, Hor;
-		computeVerAndHor2(img, Ver, Hor);
+		computeVerAndHor2(blurred_gray_img, Ver, Hor);
 
 		// smooth Ver and Hor
 		if (kernel_size > 1) {
@@ -35,6 +41,8 @@ namespace fs {
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// subdivide vertically
 		
+		cv::Range h_range = cv::Range(average_floor_height * 0.8, average_floor_height * 1.5);
+
 		// find the local minima of Ver
 		std::vector<float> y_splits_strong;
 		getSplitLines(Ver, 0.3, y_splits_strong);
@@ -49,7 +57,7 @@ namespace fs {
 		for (int i = 0; i < y_splits.size(); ++i) {
 			float SV;
 			int h;
-			computeSV(img, y_splits[i], SV, h, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5));
+			computeSV(blurred_gray_img, y_splits[i], SV, h, h_range);
 
 			SV_y_map[-SV] = y_splits[i]; // to sort Y by SV in a descending order
 			SV_max[y_splits[i]] = SV;
@@ -77,19 +85,22 @@ namespace fs {
 		}
 		
 		// find the floor boundaries
-		y_splits = findSymmetryV(img, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5), SV_max, h_max, y_candidates, y_strong_splits, tau_max, cv::Range(0, img.rows - 1));
+		std::vector<std::vector<std::pair<int, int>>> symmetry_listV;
+		y_splits = findSymmetryV(blurred_gray_img, h_range, SV_max, h_max, y_candidates, y_strong_splits, tau_max, cv::Range(0, blurred_gray_img.rows - 1), symmetry_listV);
 		std::sort(y_splits.begin(), y_splits.end());
 
-		y_splits.insert(y_splits.begin(), 0);
-		y_splits.push_back(img.rows - 1);
-
-		for (int i = 0; i < y_splits.size(); ++i) {
-			std::cout << "y split: " << y_splits[i] << std::endl;
+		if (y_splits.size() == 0 || y_splits[0] > 0) {
+			y_splits.insert(y_splits.begin(), 0);
 		}
-			
+		if (y_splits.back() < blurred_gray_img.rows - 1) {
+			y_splits.push_back(blurred_gray_img.rows - 1);
+		}
+		
 
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// subdivide horizontally
+
+		cv::Range w_range = cv::Range(average_floor_height * 0.7, average_floor_height * 2.4);
 
 		// find the local minima of Hor
 		std::vector<float> x_splits_strong;
@@ -105,7 +116,7 @@ namespace fs {
 		for (int i = 0; i < x_splits.size(); ++i) {
 			float SH;
 			int w;
-			computeSH(img, x_splits[i], SH, w, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4));
+			computeSH(blurred_gray_img, x_splits[i], SH, w, w_range);
 
 			SH_x_map[-SH] = x_splits[i]; // to sort X by SV in a descending order
 			SH_max[x_splits[i]] = SH;
@@ -125,7 +136,7 @@ namespace fs {
 			}
 		}
 
-		// sort y_candidates by SV in a descending order
+		// sort x_candidates by SH in a descending order
 		std::vector<int> x_candidates;
 		for (auto it = SH_x_map.begin(); it != SH_x_map.end(); ++it) {
 			int x = it->second;
@@ -133,32 +144,142 @@ namespace fs {
 		}
 
 		// find the floor boundaries
-		x_splits = findSymmetryH(img, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4), SH_max, w_max, x_candidates, x_strong_splits, tau_max, cv::Range(0, img.cols - 1));
+		std::vector<std::vector<std::pair<int, int>>> symmetry_listH;
+		x_splits = findSymmetryH(blurred_gray_img, w_range, SH_max, w_max, x_candidates, x_strong_splits, tau_max, cv::Range(0, blurred_gray_img.cols - 1), symmetry_listH);
 		std::sort(x_splits.begin(), x_splits.end());
-
-		x_splits.insert(x_splits.begin(), 0);
-		x_splits.push_back(img.cols - 1);
-
-		for (int i = 0; i < x_splits.size(); ++i) {
-			std::cout << "x split: " << x_splits[i] << std::endl;
+		
+		if (x_splits.size() == 0 || x_splits[0] > 0) {
+			x_splits.insert(x_splits.begin(), 0);
 		}
+		if (x_splits.back() < blurred_gray_img.cols - 1) {
+			x_splits.push_back(blurred_gray_img.cols - 1);
+		}
+		
 
-
+#if 0
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// DEBUG
 		{
 			cv::Mat_<float> SV_max;
 			cv::Mat_<int> h_max;
-			computeSV(img, SV_max, h_max, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5));
+			computeSV(img, SV_max, h_max, h_range);
 			cv::Mat_<float> SH_max;
 			cv::Mat_<int> w_max;
-			computeSH(img, SH_max, w_max, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4));
+			computeSH(img, SH_max, w_max, w_range);
 
-			outputFacadeStructure(orig_img, y_splits, x_splits, std::string("../subdivision/") + filename, cv::Scalar(0, 255, 255), 1);
-			outputFacadeStructure(orig_img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, std::string("../grad/") + filename, cv::Scalar(0, 255, 255), 1);
+			outputFacadeStructure(img, y_splits, x_splits, std::string("../subdivision/") + filename, cv::Scalar(0, 255, 255), 1);
+			outputFacadeStructure(img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, std::string("../grad/") + filename, cv::Scalar(0, 255, 255), 1);
 			//outputImageWithHorizontalAndVerticalGraph(orig_img, Ver, y_splits, Hor, x_splits, std::string("../grad/") + filename, 1);
 		}
+#endif
+
+		//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+		// windows
+#if 1
+		{
+			// compute gradient magnitude
+			cv::Mat sobelx;
+			cv::Sobel(gray_img, sobelx, CV_32F, 1, 0);
+			cv::multiply(sobelx, sobelx, sobelx);
+
+			cv::Mat sobely;
+			cv::Sobel(gray_img, sobely, CV_32F, 0, 1);
+			cv::multiply(sobely, sobely, sobely);
+
+			cv::Mat_<float> grad_mag;
+			cv::sqrt(sobelx + sobely, grad_mag);
+
+			win_rects.resize(y_splits.size() - 1);
+			for (int i = 0; i < y_splits.size() - 1; ++i) {
+				win_rects[i].resize(x_splits.size() - 1);
+				for (int j = 0; j < x_splits.size() - 1; ++j) {
+					int x1 = x_splits[j];
+					int x2 = x_splits[j + 1] - 1;
+					int y1 = y_splits[i];
+					int y2 = y_splits[i + 1] - 1;
+					int w = x2 - x1 + 1;
+					int h = y2 - y1 + 1;
+
+					// check the gradient magnitude along the boundary
+					float total_mag = 0;
+					for (int xx = x1; xx <= x2; ++xx) {
+						total_mag += grad_mag(y1, xx);
+						total_mag += grad_mag(y2, xx);
+					}
+					for (int yy = y1; yy <= y2; ++yy) {
+						total_mag += grad_mag(yy, x1);
+						total_mag += grad_mag(yy, x2);
+					}
+
+					// compute the average magnitude along the boundary
+					float avg_mag = total_mag / (w * 2 + h * 2);
+
+					// defind a threshold
+					float threshold1 = avg_mag;
+					float threshold2 = avg_mag * 3;
+
+					// detect edge
+					cv::Mat roi(gray_img, cv::Rect(x1, y1, w, h));
+					cv::Mat edges;
+					cv::Canny(roi, edges, threshold1, threshold2);
+
+					// sum up edge horizontally and vertically
+					cv::Mat edgeV, edgeH;
+					cv::reduce(edges, edgeV, 1, cv::REDUCE_SUM, CV_32F);
+					cv::reduce(edges, edgeH, 0, cv::REDUCE_SUM, CV_32F);
+					edgeH = edgeH.t();
+
+					// find the left edge of the window
+					int left = -1;
+					for (int xx = 0; xx < w; ++xx) {
+						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.25) {
+							left = xx;
+							break;
+						}
+					}
+
+					// find the right edge of the window
+					int right = -1;
+					for (int xx = w - 1; xx >= 0; --xx) {
+						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.25) {
+							right = xx;
+							break;
+						}
+					}
+
+					// find the top edge of the window
+					int top = -1;
+					for (int yy = 0; yy < h; ++yy) {
+						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.25) {
+							top = yy;
+							break;
+						}
+					}
+
+					// find the bottom edge of the window
+					int bottom = -1;
+					for (int yy = h - 1; yy >= 0; --yy) {
+						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.25) {
+							bottom = yy;
+							break;
+						}
+					}
+
+					if (left >= 0 && right >= 0 && left < right && top >= 0 && bottom >= 0 && top < bottom) {
+						win_rects[i][j] = WindowPos(left, top, right, bottom);
+					}
+					else {
+						win_rects[i][j].valid = WindowPos::INVALID;
+					}
+				}
+			}
+
+		}
+#endif
+
 	}
 
-	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range) {
+	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list) {
 		std::vector<float> splits;
 
 		if (range.end - range.start <= 1) return splits;
@@ -209,7 +330,14 @@ namespace fs {
 
 		// add new split
 		splits.push_back(best_r);
-		std::cout << "new split line: " << best_r << std::endl;
+		//std::cout << "new split line: " << best_r << std::endl;
+
+		// add a symmetry
+		if (best_S >= tau_max * 0.75) {
+			symmetry_list.resize(symmetry_list.size() + 1);
+			symmetry_list.back().push_back(std::make_pair(best_r - best_h, best_h));
+			symmetry_list.back().push_back(std::make_pair(best_r, best_h));
+		}
 
 		// find the symmetry downward
 		int cur = best_r;
@@ -217,7 +345,7 @@ namespace fs {
 			cur += best_h;
 			while (cur <= range.end) {
 				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
+				//std::cout << "    add split line: " << cur << std::endl;
 
 				float SV;
 				int h;
@@ -225,22 +353,22 @@ namespace fs {
 				if (SV < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				//cur += best_h;
+				symmetry_list.back().push_back(std::make_pair(cur, h));
 				cur += h;
 			}
 		}
 
 		// find the symmetry downward recursively
-		std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(cur, range.end));
+		std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(cur, range.end), symmetry_list);
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		// find the symmetry upward
 		cur = best_r;
 		if (best_S >= tau_max * 0.75) {
 			cur -= best_h;
-			while (cur >= range.start) {
+			while (cur >= range.start) {				
 				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
+				//std::cout << "    add split line: " << cur << std::endl;
 
 				float SV;
 				int h;
@@ -248,19 +376,19 @@ namespace fs {
 				if (SV < tau_max * 0.75) break;
 				if (abs(h - best_h) > best_h * 0.1) break;
 
-				//cur -= best_h;
+				symmetry_list.back().push_back(std::make_pair(cur - h, h));
 				cur -= h;
 			}
 		}
 
 		// find the symmetry upward recursively
-		new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(range.start, cur));
+		new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(range.start, cur), symmetry_list);
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		return splits;
 	}
 
-	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range) {
+	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list) {
 		std::vector<float> splits;
 
 		if (range.end - range.start <= 1) return splits;
@@ -311,7 +439,14 @@ namespace fs {
 
 		// add new split
 		splits.push_back(best_r);
-		std::cout << "new split line: " << best_r << std::endl;
+		//std::cout << "new split line: " << best_r << std::endl;
+
+		// add a symmetry
+		if (best_S >= tau_max * 0.75) {
+			symmetry_list.resize(symmetry_list.size() + 1);
+			symmetry_list.back().push_back(std::make_pair(best_r - best_h, best_h));
+			symmetry_list.back().push_back(std::make_pair(best_r, best_h));
+		}
 
 		// find the symmetry downward
 		int cur = best_r;
@@ -319,7 +454,7 @@ namespace fs {
 			cur += best_h;
 			while (cur <= range.end) {
 				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
+				//std::cout << "    add split line: " << cur << std::endl;
 
 				float SH;
 				int h;
@@ -327,13 +462,13 @@ namespace fs {
 				if (SH < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				//cur += best_h;
+				symmetry_list.back().push_back(std::make_pair(cur, h));
 				cur += h;
 			}
 		}
 
 		// find the symmetry downward recursively
-		std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(cur, range.end));
+		std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(cur, range.end), symmetry_list);
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		// find the symmetry upward
@@ -342,7 +477,7 @@ namespace fs {
 			cur -= best_h;
 			while (cur >= range.start) {
 				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
+				//std::cout << "    add split line: " << cur << std::endl;
 
 				float SH;
 				int h;
@@ -350,13 +485,13 @@ namespace fs {
 				if (SH < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				//cur -= best_h;
+				symmetry_list.back().push_back(std::make_pair(cur - h, h));
 				cur -= h;
 			}
 		}
 
 		// find the symmetry downward recursively
-		new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(range.start, cur));
+		new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(range.start, cur), symmetry_list);
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		return splits;
@@ -370,7 +505,7 @@ namespace fs {
 	* @return			類似度
 	*/
 	float MI(const cv::Mat& R1, const cv::Mat& R2) {
-#if 0
+#if 1
 		cv::Mat_<float> Pab(256, 256, 0.0f);
 		cv::Mat_<float> Pa(256, 1, 0.0f);
 		cv::Mat_<float> Pb(256, 1, 0.0f);
@@ -418,7 +553,7 @@ namespace fs {
 
 		return result;
 #endif
-#if 1
+#if 0
 		cv::Mat norm_R1;
 		cv::Mat norm_R2;
 
@@ -586,7 +721,7 @@ namespace fs {
 		cvutils::grayScale(img, grayImg);
 
 		// smoothing
-		cv::GaussianBlur(grayImg, grayImg, cv::Size(5, 5), 5, 5);
+		//cv::GaussianBlur(grayImg, grayImg, cv::Size(5, 5), 5, 5);
 
 		// compute gradient magnitude
 		cv::Mat sobelx;
@@ -1509,11 +1644,11 @@ namespace fs {
 		for (int i = 0; i < y_split.size() - 1; ++i) {
 			for (int j = 0; j < x_split.size() - 1; ++j) {
 				if (winpos[i][j].valid == WindowPos::VALID) {
-					int x1 = x_split[j] + winpos[i][j].left;
-					int y1 = y_split[i] + winpos[i][j].top;
-					int x2 = x_split[j + 1] - 1 - winpos[i][j].right;
-					int y2 = y_split[i + 1] - 1 - winpos[i][j].bottom;
-					cv::rectangle(result, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1), lineColor, lineWidth);
+					int x = x_split[j] + winpos[i][j].left;
+					int y = y_split[i] + winpos[i][j].top;
+					int w = winpos[i][j].right - winpos[i][j].left + 1;
+					int h = winpos[i][j].bottom - winpos[i][j].top + 1;
+					cv::rectangle(result, cv::Rect(x, y, w, h), lineColor, lineWidth);
 				}
 			}
 		}
