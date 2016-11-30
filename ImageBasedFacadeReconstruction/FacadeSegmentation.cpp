@@ -200,6 +200,12 @@ namespace fs {
 					int w = x2 - x1 + 1;
 					int h = y2 - y1 + 1;
 
+					// for too small region, no window is created
+					if (h < average_floor_height * 0.25 || w < average_floor_height * 0.2) {
+						win_rects[i][j].valid = WindowPos::INVALID;
+						continue;
+					}
+					
 					// check the gradient magnitude along the boundary
 					float total_mag = 0;
 					for (int xx = x1; xx <= x2; ++xx) {
@@ -232,7 +238,7 @@ namespace fs {
 					// find the left edge of the window
 					int left = -1;
 					for (int xx = 0; xx < w; ++xx) {
-						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.25) {
+						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.2) {
 							left = xx;
 							break;
 						}
@@ -241,7 +247,7 @@ namespace fs {
 					// find the right edge of the window
 					int right = -1;
 					for (int xx = w - 1; xx >= 0; --xx) {
-						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.25) {
+						if (edgeH.at<float>(xx, 0) >= 255 * h * 0.2) {
 							right = xx;
 							break;
 						}
@@ -250,7 +256,7 @@ namespace fs {
 					// find the top edge of the window
 					int top = -1;
 					for (int yy = 0; yy < h; ++yy) {
-						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.25) {
+						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.2) {
 							top = yy;
 							break;
 						}
@@ -259,7 +265,7 @@ namespace fs {
 					// find the bottom edge of the window
 					int bottom = -1;
 					for (int yy = h - 1; yy >= 0; --yy) {
-						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.25) {
+						if (edgeV.at<float>(yy, 0) >= 255 * w * 0.2) {
 							bottom = yy;
 							break;
 						}
