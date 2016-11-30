@@ -36,12 +36,15 @@ namespace fs {
 		// subdivide vertically
 		
 		// find the local minima of Ver
+		std::vector<float> y_splits_strong;
+		getSplitLines(Ver, 0.3, y_splits_strong);
 		getSplitLines(Ver, 0.15, y_splits);
 
 		// compute S_max and h_max
 		std::map<float, int> SV_y_map;
 		std::map<int, float> SV_max;
 		std::map<int, int> h_max;
+		std::map<int, bool> y_strong_splits;
 		float tau_max = 0;
 		for (int i = 0; i < y_splits.size(); ++i) {
 			float SV;
@@ -52,10 +55,21 @@ namespace fs {
 			SV_max[y_splits[i]] = SV;
 			h_max[y_splits[i]] = h;
 
+			// check whether the split at this point is a strong one or not.
+			if (std::find(y_splits_strong.begin(), y_splits_strong.end(), y_splits[i]) != y_splits_strong.end()) {
+				y_strong_splits[y_splits[i]] = true;
+			}
+			else {
+				y_strong_splits[y_splits[i]] = false;
+			}
+
+			// update tau_max
 			if (SV > tau_max) {
 				tau_max = SV;
 			}
 		}
+
+		// sort y_candidates by SV in a descending order
 		std::vector<int> y_candidates;
 		for (auto it = SV_y_map.begin(); it != SV_y_map.end(); ++it) {
 			int y = it->second;
@@ -63,7 +77,7 @@ namespace fs {
 		}
 		
 		// find the floor boundaries
-		y_splits = findSymmetryV(img, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5), SV_max, h_max, y_candidates, tau_max, cv::Range(0, img.rows - 1));
+		y_splits = findSymmetryV(img, cv::Range(average_floor_height * 0.8, average_floor_height * 1.5), SV_max, h_max, y_candidates, y_strong_splits, tau_max, cv::Range(0, img.rows - 1));
 		std::sort(y_splits.begin(), y_splits.end());
 
 		y_splits.insert(y_splits.begin(), 0);
@@ -78,12 +92,15 @@ namespace fs {
 		// subdivide horizontally
 
 		// find the local minima of Hor
+		std::vector<float> x_splits_strong;
+		getSplitLines(Hor, 0.3, x_splits_strong);
 		getSplitLines(Hor, 0.15, x_splits);
 
 		// compute S_max and w_max
 		std::map<float, int> SH_x_map;
 		std::map<int, float> SH_max;
 		std::map<int, int> w_max;
+		std::map<int, bool> x_strong_splits;
 		tau_max = 0;
 		for (int i = 0; i < x_splits.size(); ++i) {
 			float SH;
@@ -94,10 +111,21 @@ namespace fs {
 			SH_max[x_splits[i]] = SH;
 			w_max[x_splits[i]] = w;
 
+			// check whether the split at this point is a strong one or not.
+			if (std::find(x_splits_strong.begin(), x_splits_strong.end(), x_splits[i]) != x_splits_strong.end()) {
+				x_strong_splits[x_splits[i]] = true;
+			}
+			else {
+				x_strong_splits[x_splits[i]] = false;
+			}
+
+			// update tau_max
 			if (SH > tau_max) {
 				tau_max = SH;
 			}
 		}
+
+		// sort y_candidates by SV in a descending order
 		std::vector<int> x_candidates;
 		for (auto it = SH_x_map.begin(); it != SH_x_map.end(); ++it) {
 			int x = it->second;
@@ -105,7 +133,7 @@ namespace fs {
 		}
 
 		// find the floor boundaries
-		x_splits = findSymmetryH(img, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4), SH_max, w_max, x_candidates, tau_max, cv::Range(0, img.cols - 1));
+		x_splits = findSymmetryH(img, cv::Range(average_floor_height * 0.4, average_floor_height * 2.4), SH_max, w_max, x_candidates, x_strong_splits, tau_max, cv::Range(0, img.cols - 1));
 		std::sort(x_splits.begin(), x_splits.end());
 
 		x_splits.insert(x_splits.begin(), 0);
@@ -130,7 +158,7 @@ namespace fs {
 		}
 	}
 
-	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, float tau_max, cv::Range range) {
+	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range) {
 		std::vector<float> splits;
 
 		if (range.end - range.start <= 1) return splits;
@@ -145,12 +173,35 @@ namespace fs {
 			// too small region should not be considered for symmetry
 			if (h_max[r] <= 2) continue;
 			
+			// skip a weak split at first try
+			if (!strong_splits[r]) continue;
+
 			if (r - h_max[r] < range.start || r + h_max[r] >= range.end) continue;
 
 			best_r = r;
 			best_S = S_max[r];
 			best_h = h_max[r];
 			break;
+		}
+
+		// second try
+		if (best_r == -1) {
+			for (int i = 0; i < y_candidates.size(); ++i) {
+				int r = y_candidates[i];
+
+				// too small region should not be considered for symmetry
+				if (h_max[r] <= 2) continue;
+
+				// skip a strong split in the second try
+				if (strong_splits[r]) continue;
+
+				if (r - h_max[r] < range.start || r + h_max[r] >= range.end) continue;
+
+				best_r = r;
+				best_S = S_max[r];
+				best_h = h_max[r];
+				break;
+			}
 		}
 
 		// stop here if no max S is found.
@@ -180,7 +231,7 @@ namespace fs {
 		}
 
 		// find the symmetry downward recursively
-		std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, tau_max, cv::Range(cur, range.end));
+		std::vector<float> new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(cur, range.end));
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		// find the symmetry upward
@@ -203,13 +254,13 @@ namespace fs {
 		}
 
 		// find the symmetry upward recursively
-		new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, tau_max, cv::Range(range.start, cur));
+		new_splits = findSymmetryV(img, h_range, S_max, h_max, y_candidates, strong_splits, tau_max, cv::Range(range.start, cur));
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		return splits;
 	}
 
-	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, float tau_max, cv::Range range) {
+	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range) {
 		std::vector<float> splits;
 
 		if (range.end - range.start <= 1) return splits;
@@ -224,12 +275,35 @@ namespace fs {
 			// too small region should not be considered for symmetry
 			if (h_max[r] <= 2) continue;
 
+			// skip a weak split at first try
+			if (!strong_splits[r]) continue;
+
 			if (r - h_max[r] < range.start || r + h_max[r] > range.end) continue;
 
 			best_r = r;
 			best_S = S_max[r];
 			best_h = h_max[r];
 			break;
+		}
+
+		// second try
+		if (best_r == -1) {
+			for (int i = 0; i < x_candidates.size(); ++i) {
+				int r = x_candidates[i];
+
+				// too small region should not be considered for symmetry
+				if (h_max[r] <= 2) continue;
+
+				// skip a strong split in the second try
+				if (strong_splits[r]) continue;
+
+				if (r - h_max[r] < range.start || r + h_max[r] > range.end) continue;
+
+				best_r = r;
+				best_S = S_max[r];
+				best_h = h_max[r];
+				break;
+			}
 		}
 
 		// stop here if no max S is found.
@@ -259,7 +333,7 @@ namespace fs {
 		}
 
 		// find the symmetry downward recursively
-		std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, tau_max, cv::Range(cur, range.end));
+		std::vector<float> new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(cur, range.end));
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		// find the symmetry upward
@@ -282,7 +356,7 @@ namespace fs {
 		}
 
 		// find the symmetry downward recursively
-		new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, tau_max, cv::Range(range.start, cur));
+		new_splits = findSymmetryH(img, h_range, S_max, h_max, x_candidates, strong_splits, tau_max, cv::Range(range.start, cur));
 		splits.insert(splits.end(), new_splits.begin(), new_splits.end());
 		
 		return splits;
@@ -296,7 +370,7 @@ namespace fs {
 	* @return			類似度
 	*/
 	float MI(const cv::Mat& R1, const cv::Mat& R2) {
-#if 1
+#if 0
 		cv::Mat_<float> Pab(256, 256, 0.0f);
 		cv::Mat_<float> Pa(256, 1, 0.0f);
 		cv::Mat_<float> Pb(256, 1, 0.0f);
@@ -344,7 +418,7 @@ namespace fs {
 
 		return result;
 #endif
-#if 0
+#if 1
 		cv::Mat norm_R1;
 		cv::Mat norm_R2;
 
