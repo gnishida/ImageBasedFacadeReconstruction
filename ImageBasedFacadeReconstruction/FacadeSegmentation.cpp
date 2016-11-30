@@ -162,20 +162,21 @@ namespace fs {
 
 		// find the symmetry downward
 		int cur = best_r;
-		if (best_S >= tau_max * 0.5) {
+		if (best_S >= tau_max * 0.75) {
 			cur += best_h;
 			while (cur <= range.end) {
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+
 				float SV;
 				int h;
 				computeSV(img, cur, SV, h, h_range);
-				if (SV < tau_max * 0.5) break;
+				if (SV < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
-				cur += best_h;
+				//cur += best_h;
+				cur += h;
 			}
-			splits.push_back(cur);
 		}
 
 		// find the symmetry downward recursively
@@ -184,20 +185,21 @@ namespace fs {
 		
 		// find the symmetry upward
 		cur = best_r;
-		if (best_S >= tau_max * 0.5) {
+		if (best_S >= tau_max * 0.75) {
 			cur -= best_h;
 			while (cur >= range.start) {
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+
 				float SV;
 				int h;
 				computeSV(img, cur, SV, h, h_range);
-				if (SV < tau_max * 0.5) break;
-				if (abs(h - best_h) >  best_h * 0.1) break;
+				if (SV < tau_max * 0.75) break;
+				if (abs(h - best_h) > best_h * 0.1) break;
 
-				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
-				cur -= best_h;
+				//cur -= best_h;
+				cur -= h;
 			}
-			splits.push_back(cur);
 		}
 
 		// find the symmetry upward recursively
@@ -239,20 +241,21 @@ namespace fs {
 
 		// find the symmetry downward
 		int cur = best_r;
-		if (best_S >= tau_max * 0.5) {
+		if (best_S >= tau_max * 0.75) {
 			cur += best_h;
 			while (cur <= range.end) {
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+
 				float SH;
 				int h;
 				computeSH(img, cur, SH, h, h_range);
-				if (SH < tau_max * 0.5) break;
+				if (SH < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
-				cur += best_h;
+				//cur += best_h;
+				cur += h;
 			}
-			splits.push_back(cur);
 		}
 
 		// find the symmetry downward recursively
@@ -261,20 +264,21 @@ namespace fs {
 		
 		// find the symmetry upward
 		cur = best_r;
-		if (best_S >= tau_max * 0.5) {
+		if (best_S >= tau_max * 0.75) {
 			cur -= best_h;
 			while (cur >= range.start) {
+				splits.push_back(cur);
+				std::cout << "    add split line: " << cur << std::endl;
+
 				float SH;
 				int h;
 				computeSH(img, cur, SH, h, h_range);
-				if (SH < tau_max * 0.5) break;
+				if (SH < tau_max * 0.75) break;
 				if (abs(h - best_h) >  best_h * 0.1) break;
 
-				splits.push_back(cur);
-				std::cout << "    add split line: " << cur << std::endl;
-				cur -= best_h;
+				//cur -= best_h;
+				cur -= h;
 			}
-			splits.push_back(cur);
 		}
 
 		// find the symmetry downward recursively
@@ -292,7 +296,7 @@ namespace fs {
 	* @return			類似度
 	*/
 	float MI(const cv::Mat& R1, const cv::Mat& R2) {
-#if 0
+#if 1
 		cv::Mat_<float> Pab(256, 256, 0.0f);
 		cv::Mat_<float> Pa(256, 1, 0.0f);
 		cv::Mat_<float> Pb(256, 1, 0.0f);
@@ -340,7 +344,7 @@ namespace fs {
 
 		return result;
 #endif
-#if 1
+#if 0
 		cv::Mat norm_R1;
 		cv::Mat norm_R2;
 
