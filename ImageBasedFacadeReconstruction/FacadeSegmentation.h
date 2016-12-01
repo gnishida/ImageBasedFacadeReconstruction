@@ -21,9 +21,11 @@ namespace fs {
 	};
 
 	void subdivideFacade(cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
-	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
-	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<int>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
-	void findMaxSAroundLocalMinimumVer(cv::Mat img, cv::Mat_<float> Ver, cv::Range range, cv::Range h_range, float& S_max, int& best_h, int& best_r);
+	std::vector<float> findSymmetryV(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<float>& y_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
+	std::vector<float> findSymmetryH(const cv::Mat& img, const cv::Range& h_range, std::map<int, float>& S_max, std::map<int, int>& h_max, const std::vector<float>& x_candidates, std::map<int, bool>& strong_splits, float tau_max, cv::Range range, std::vector<std::vector<std::pair<int, int>>>& symmetry_list);
+	bool sortBySecondValue(const std::pair<float, float>& a, const std::pair<float, float>& b);
+	void sortByS(std::vector<float>& splits, std::map<int, float>& S_max);
+	//void findMaxSAroundLocalMinimumVer(cv::Mat img, cv::Mat_<float> Ver, cv::Range range, cv::Range h_range, float& S_max, int& best_h, int& best_r);
 	float MI(const cv::Mat& R1, const cv::Mat& R2);
 	void computeSV(const cv::Mat& img, cv::Mat_<float>& SV_max, cv::Mat_<int>& h_max, const cv::Range& h_range);
 	void computeSV(const cv::Mat& img, int r, float& SV_max, int& h_max, const cv::Range& h_range);

@@ -91,6 +91,50 @@ int main() {
 		std::vector<std::vector<fs::WindowPos>> win_rects;
 		fs::subdivideFacade(img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
 
+		// grad image
+		{
+			cv::Mat gray_img;
+			cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
+
+			// average floor height
+			float average_floor_height = (float)img.rows / num_floors[it->path().filename().string()];
+
+			// compute kernel size
+			int kernel_size = average_floor_height / 6;
+			if (kernel_size % 2 == 0) kernel_size++;
+
+			// blur the image according to the average floor height
+			cv::Mat blurred_gray_img;
+			if (kernel_size > 1) {
+				cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size, kernel_size), kernel_size);
+			}
+			else {
+				blurred_gray_img = gray_img.clone();
+			}
+
+			cv::Range h_range = cv::Range(average_floor_height * 0.8, average_floor_height * 1.5);
+			cv::Range w_range = cv::Range(average_floor_height * 0.7, average_floor_height * 2.4);
+
+			// compute Ver and Hor
+			cv::Mat_<float> Ver, Hor;
+			fs::computeVerAndHor2(blurred_gray_img, Ver, Hor);
+
+			// smooth Ver and Hor
+			if (kernel_size > 1) {
+				cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
+				cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
+			}
+
+			cv::Mat_<float> SV_max;
+			cv::Mat_<int> h_max;
+			fs::computeSV(blurred_gray_img, SV_max, h_max, h_range);
+			cv::Mat_<float> SH_max;
+			cv::Mat_<int> w_max;
+			fs::computeSH(blurred_gray_img, SH_max, w_max, w_range);
+
+			fs::outputFacadeStructure(img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, dir_grad.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 1);
+		}
+
 		// subdivision image
 		fs::outputFacadeStructure(img, y_splits, x_splits, dir_subdiv.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 		
