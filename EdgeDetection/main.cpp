@@ -3,15 +3,15 @@
 #include <opencv2/imgproc.hpp>
 
 int main() {
-	cv::Mat img = cv::imread("../testdata/test4.png");
+	cv::Mat img = cv::imread("../testdata/11.png");
 
 	cv::Mat gray_img;
 	cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 
 	cv::Mat edges;
-	cv::Canny(gray_img, edges, 50, 200);
+	cv::Canny(gray_img, edges, 100, 300);
 
-	cv::imwrite("edge4.png", edges);
+	cv::imwrite("11.png", edges);
 
 	return 0;
 }

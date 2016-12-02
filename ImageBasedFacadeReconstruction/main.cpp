@@ -22,6 +22,39 @@
 #include <boost/filesystem.hpp>
 
 int main() {
+# if 0
+	boost::filesystem::path dir("../rolling/");
+	for (auto it = boost::filesystem::directory_iterator(dir); it != boost::filesystem::directory_iterator(); ++it) {
+		if (boost::filesystem::is_directory(it->path())) continue;
+
+		cv::Mat img = cv::imread((std::string("../rolling/") + it->path().filename().string()).c_str());
+		cv::Mat gray_img;
+		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
+
+		cv::Mat_<float> Ver, Hor;
+		fs::computeVerAndHor2(gray_img, Ver, Hor, 0);
+
+		fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, Hor, std::string("../rolling_grad/") + it->path().filename().string());
+
+		cv::Mat edge_img;
+		cv::Canny(img, edge_img, 30, 100);
+		cv::imwrite((std::string("../rolling_edge/") + it->path().filename().string()).c_str(), edge_img);
+
+		cv::Mat line_img = img.clone();
+		std::vector<cv::Vec4i> lines;
+		cv::HoughLinesP(edge_img, lines, 1, CV_PI / 180, 20, 3, 1);
+		for (size_t i = 0; i < lines.size(); ++i) {
+			float theta = atan2(lines[i][3] - lines[i][1], lines[i][2] - lines[i][0]) / CV_PI * 180;
+			if (abs(theta) < 10 || abs(theta) > 170) {
+				cv::line(line_img, cv::Point(lines[i][0], lines[i][1]), cv::Point(lines[i][2], lines[i][3]), cv::Scalar(0, 255, 255), 3, 8);
+			}
+		}
+		cv::imwrite((std::string("../rolling_line/") + it->path().filename().string()).c_str(), line_img);
+	}
+#endif
+
+
+#if 1
 	bool align_windows = false;
 	bool resize = false;
 	cv::Size output_size(227, 227);
@@ -58,33 +91,6 @@ int main() {
 		//cv::Mat gray_img;
 		//cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 
-#if 0
-		{
-			cv::Mat_<float> Ver;
-			cv::Mat_<float> Hor;
-			fs::computeVerAndHor2(img, Ver, Hor);
-
-			std::ofstream out(dir_curve.string() + it->path().filename().string() + ".txt", std::ofstream::out);
-			for (int i = 0; i < Ver.rows; ++i) {
-				out << Ver(i, 0) << std::endl;
-			}
-			out.close();
-		}
-
-
-		// edge images
-		{
-			cv::Mat gray_img;
-			cvutils::grayScale(img, gray_img);
-			cv::Mat edge_img;
-			cv::Canny(gray_img, edge_img, 80, 240);
-			cv::imwrite(dir_edge.string() + it->path().filename().string(), edge_img);
-		}
-#endif
-
-
-
-
 		// subdivide the facade into tiles and windows
 		std::vector<float> x_splits;
 		std::vector<float> y_splits;
@@ -100,7 +106,7 @@ int main() {
 			float average_floor_height = (float)img.rows / num_floors[it->path().filename().string()];
 
 			// compute kernel size
-			int kernel_size = average_floor_height / 6;
+			int kernel_size = average_floor_height / 8;
 			if (kernel_size % 2 == 0) kernel_size++;
 
 			// blur the image according to the average floor height
@@ -117,7 +123,7 @@ int main() {
 
 			// compute Ver and Hor
 			cv::Mat_<float> Ver, Hor;
-			fs::computeVerAndHor2(blurred_gray_img, Ver, Hor);
+			fs::computeVerAndHor2(blurred_gray_img, Ver, Hor, 0.0);
 
 			// smooth Ver and Hor
 			if (kernel_size > 1) {
@@ -125,14 +131,17 @@ int main() {
 				cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
 			}
 
+			/*
 			cv::Mat_<float> SV_max;
 			cv::Mat_<int> h_max;
 			fs::computeSV(blurred_gray_img, SV_max, h_max, h_range);
 			cv::Mat_<float> SH_max;
 			cv::Mat_<int> w_max;
 			fs::computeSH(blurred_gray_img, SH_max, w_max, w_range);
+			*/
 
-			fs::outputFacadeStructure(img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, dir_grad.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 1);
+			//fs::outputFacadeStructure(img, SV_max, Ver, h_max, y_splits, SH_max, Hor, w_max, x_splits, dir_grad.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 1);
+			fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, y_splits, Hor, x_splits, std::string("../grad/") + it->path().filename().string(), 1);
 		}
 
 		// subdivision image
@@ -142,6 +151,8 @@ int main() {
 		fs::outputFacadeAndWindows(img, y_splits, x_splits, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 
 	}
+
+#endif
 
 	return 0;
 }
