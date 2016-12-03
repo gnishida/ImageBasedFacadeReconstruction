@@ -182,6 +182,7 @@ namespace fs {
 					}
 					float S_avg = S_total / (selected_candidates[i].size() - 2);
 
+
 					if (repetition > max_repetition) {
 						max_S = S_avg;
 						best_id = i;
@@ -1567,7 +1568,7 @@ namespace fs {
 		cv::imwrite(filename, result);
 	}
 
-	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const std::vector<float>& ys, const cv::Mat& hor, const std::vector<float>& xs, const std::string& filename, int lineWidth) {
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat_<float>& ver, const std::vector<float>& ys, const cv::Mat_<float>& hor, const std::vector<float>& xs, const std::string& filename, int lineWidth) {
 		int graphSize = std::max(10.0, std::max(img.rows, img.cols) * 0.3);
 
 		cv::Mat result;
@@ -1597,8 +1598,8 @@ namespace fs {
 
 		// draw vertical graph
 		for (int r = 0; r < img.rows - 1; ++r) {
-			int x1 = img.cols + (cvutils::get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
-			int x2 = img.cols + (cvutils::get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x1 = img.cols + (ver(r) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + (ver(r + 1) - min_ver) / (max_ver - min_ver) * graphSize;
 
 			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
 		}
@@ -1608,8 +1609,8 @@ namespace fs {
 
 		// draw horizontal graph
 		for (int c = 0; c < img.cols - 1; ++c) {
-			int y1 = img.rows + (cvutils::get(hor, 0, c) - min_hor) / (max_hor - min_hor) * graphSize;
-			int y2 = img.rows + (cvutils::get(hor, 0, c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y1 = img.rows + (hor(c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (hor(c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
 		}
@@ -1620,7 +1621,7 @@ namespace fs {
 		cv::imwrite(filename, result);
 	}
 
-	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat& ver, const cv::Mat& hor, const std::string& filename) {
+	void outputImageWithHorizontalAndVerticalGraph(const cv::Mat& img, const cv::Mat_<float>& ver, const cv::Mat_<float>& hor, const std::string& filename) {
 		int graphSize = std::max(10.0, std::max(img.rows, img.cols) * 0.3);
 
 		cv::Mat result;
@@ -1650,16 +1651,16 @@ namespace fs {
 
 		// draw vertical graph
 		for (int r = 0; r < img.rows - 1; ++r) {
-			int x1 = img.cols + (cvutils::get(ver, r, 0) - min_ver) / (max_ver - min_ver) * graphSize;
-			int x2 = img.cols + (cvutils::get(ver, r + 1, 0) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x1 = img.cols + (ver(r) - min_ver) / (max_ver - min_ver) * graphSize;
+			int x2 = img.cols + (ver(r + 1) - min_ver) / (max_ver - min_ver) * graphSize;
 
 			cv::line(result, cv::Point(x1, r), cv::Point(x2, r + 1), graph_color, 1, cv::LINE_8);
 		}
 
 		// draw horizontal graph
 		for (int c = 0; c < img.cols - 1; ++c) {
-			int y1 = img.rows + (cvutils::get(hor, c, 0) - min_hor) / (max_hor - min_hor) * graphSize;
-			int y2 = img.rows + (cvutils::get(hor, c + 1, 0) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y1 = img.rows + (hor(c) - min_hor) / (max_hor - min_hor) * graphSize;
+			int y2 = img.rows + (hor(c + 1) - min_hor) / (max_hor - min_hor) * graphSize;
 
 			cv::line(result, cv::Point(c, y1), cv::Point(c + 1, y2), graph_color, 1, cv::LINE_8);
 		}
