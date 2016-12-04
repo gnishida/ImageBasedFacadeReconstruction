@@ -7,22 +7,25 @@
 namespace fs {
 	int seq = 0;
 
-	void subdivideFacade(cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
+	void subdivideFacade(cv::Mat img, int num_floors, int num_columns, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
 		// gray scale
 		cv::Mat gray_img;
 		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 		
 		// average floor height
 		float average_floor_height = (float)img.rows / num_floors;
+		float average_column_width = (float)img.cols / num_columns;
 
 		// compute kernel size
-		int kernel_size = average_floor_height / 8;
-		if (kernel_size % 2 == 0) kernel_size++;
+		int kernel_size_V = average_floor_height / 8;
+		if (kernel_size_V % 2 == 0) kernel_size_V++;
+		int kernel_size_H = average_column_width / 8;
+		if (kernel_size_H % 2 == 0) kernel_size_H++;
 
 		// blur the image according to the average floor height
 		cv::Mat blurred_gray_img;
-		if (kernel_size > 1) {
-			cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size, kernel_size), kernel_size);
+		if (kernel_size_V > 1) {
+			cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size_V, kernel_size_V), kernel_size_V);
 		}
 		else {
 			blurred_gray_img = gray_img.clone();
@@ -33,45 +36,44 @@ namespace fs {
 		computeVerAndHor2(blurred_gray_img, Ver, Hor, 0.0);
 
 		// smooth Ver and Hor
-		if (kernel_size > 1) {
-			cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
-			cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
+		if (kernel_size_V > 1) {
+			cv::blur(Ver, Ver, cv::Size(kernel_size_V, kernel_size_V));
+		}
+		if (kernel_size_H > 1) {
+			cv::blur(Hor, Hor, cv::Size(kernel_size_H, kernel_size_H));
 		}
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// subdivide vertically
 		
 		// find the floor boundaries
-		cv::Range h_range = cv::Range(average_floor_height * 0.7, average_floor_height * 1.5);
-		y_splits = findBoundaries(blurred_gray_img, h_range, Ver);
+		cv::Range h_range1 = cv::Range(average_floor_height * 0.7, average_floor_height * 1.5);
+		cv::Range h_range2 = cv::Range(average_floor_height * 0.5, average_floor_height * 1.95);
+		y_splits = findBoundaries(blurred_gray_img, h_range1, h_range2, num_floors + 1, Ver);
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// subdivide horizontally
 		
 		// find the floor boundaries
-		cv::Range w_range = cv::Range(average_floor_height * 0.2, average_floor_height * 2.4);
-		x_splits = findBoundaries(blurred_gray_img.t(), w_range, Hor);
+		cv::Range w_range1 = cv::Range(average_column_width * 0.6, average_column_width * 1.3);
+		cv::Range w_range2 = cv::Range(average_column_width * 0.3, average_column_width * 1.95);
+		x_splits = findBoundaries(blurred_gray_img.t(), w_range1, w_range2, num_columns + 1, Hor);
 		
 		extractWindows(gray_img, Ver, Hor, y_splits, x_splits, win_rects);
 	}
 
-	std::vector<float> findBoundaries(const cv::Mat& img, const cv::Range& range, const cv::Mat& Ver) {
+	std::vector<float> findBoundaries(const cv::Mat& img, cv::Range range1, cv::Range range2, int num_splits, const cv::Mat_<float>& Ver) {
 		std::vector<std::vector<float>> good_candidates;
 
 		// find the local minima of Ver
 		std::vector<float> y_splits_strong;
 		getSplitLines(Ver, 0.5, y_splits_strong);
 
-		if (y_splits_strong.size() == 0) {
-			std::cerr << "-----------------------------------" << std::endl;
-			std::cerr << "ERROR!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
-		}
-
-		for (float threshold = 0.3; threshold >= 0.01; threshold -= 0.05) {
+		for (int iter = 0; iter < 2; ++iter) {
 			// find the local minima of Ver
 			std::vector<float> y_splits;
-			getSplitLines(Ver, threshold, y_splits);
-			
+			getSplitLines(Ver, 0.05 / (iter + 1), y_splits);
+
 			// check whether each split is strong or not
 			std::map<float, bool> is_strong;
 			for (int i = 0; i < y_splits.size(); ++i) {
@@ -89,117 +91,137 @@ namespace fs {
 				std::vector<float> list = queue.back();
 				queue.pop_back();
 
-				if (img.rows - list.back() >= range.start && img.rows - list.back() <= range.end) {
+				if (img.rows - list.back() >= range2.start && img.rows - list.back() <= range2.end) {
 					std::vector<float> new_list = list;
 					new_list.push_back(img.rows - 1);
-					good_candidates.push_back(new_list);
+
+					// Only if the number of splits so far does not exceed the limit,
+					// add this to the candidate list.
+					if (std::abs((int)new_list.size() - num_splits) <= 1) {
+						good_candidates.push_back(new_list);
+					}
 				}
 
 				for (int i = 0; i < y_splits.size(); ++i) {
 					if (y_splits[i] <= list.back()) continue;
-					if (y_splits[i] - list.back() < range.start || y_splits[i] - list.back() > range.end) continue;
+					if (list.size() == 1) {
+						// for the top floor, use the wider range to check
+						if (y_splits[i] - list.back() < range2.start || y_splits[i] - list.back() > range2.end) continue;
+					}
+					else {
+						// for other floors, use the narrower range to check
+						if (y_splits[i] - list.back() < range1.start || y_splits[i] - list.back() > range1.end) continue;
+					}
 
 					std::vector<float> new_list = list;
 					new_list.push_back(y_splits[i]);
-					queue.push_back(new_list);
+
+					// Only if the number of splits so far does not exceed the limit,
+					// add this to the queue.
+					if ((int)new_list.size() + 1 - num_splits <= 1) {
+						queue.push_back(new_list);
+					}
+
+					// If this split is a strong one, you cannot skip this, so stop here.
+					if (is_strong[y_splits[i]]) {
+						break;
+					}
 				}
 
 			}
 
-			// if there is no good candidate found, decrease the threshold to find more local minima
-			if (good_candidates.size() == 0) continue;
-
-			// remove the candidates that do not contain enough strong splits
-			std::vector<std::vector<float>> selected_candidates;
-			for (int i = 0; i < good_candidates.size(); ++i) {
-				int cnt = 0;
-				for (int k = 0; k < good_candidates[i].size(); ++k) {
-					if (is_strong[good_candidates[i][k]]) cnt++;
+			// discard the candidates that have too few strong splits
+			for (int i = 0; i < good_candidates.size(); ) {
+				int num_strong_splits = 0;
+				for (int j = 0; j < good_candidates[i].size(); ++j) {
+					if (is_strong[good_candidates[i][j]]) num_strong_splits++;
 				}
 
-				if ((float)cnt / y_splits_strong.size() >= 0.7) {
-					selected_candidates.push_back(good_candidates[i]);
+				if ((float)num_strong_splits < y_splits_strong.size() * 0.8) {
+					good_candidates.erase(good_candidates.begin() + i);
+				}
+				else {
+					++i;
 				}
 			}
 
-			// if there is nothing selected, use the first candidate
-			if (selected_candidates.size() == 0) {
-				return good_candidates[0];
+			// if there is no good candidate found, increase the range and start over the process
+			if (good_candidates.size() == 0) {
+				continue;
 			}
 
 			// if there is only one option, select it.
-			if (selected_candidates.size() == 1) {
-				return selected_candidates[0];
+			if (good_candidates.size() == 1) {
+				return good_candidates[0];
 			}
 
-			// compute S between adjacent regions
-			float max_S = -std::numeric_limits<float>::max();
-			int max_repetition = 0;
+#if 1
+			// find the best candidate
+			float min_val = std::numeric_limits<float>::max();
 			int best_id = -1;
-			for (int i = 0; i < selected_candidates.size(); ++i) {
-				int repetition = 0;
-
-				if (selected_candidates[i].size() <= 2) {
-					repetition = 0;
-				}
-				else {
-					int cur_repetition = 0;
-					for (int k = 0; k < selected_candidates[i].size() - 2; ++k) {
-						int h1 = selected_candidates[i][k + 1] - selected_candidates[i][k];
-						int h2 = selected_candidates[i][k + 2] - selected_candidates[i][k + 1];
-
-						// check if the size is similar
-						if ((float)h1 / h2 <= 1.3 && (float)h2 / h1 <= 1.3) {
-							cur_repetition++;
-							if (cur_repetition > repetition) {
-								repetition = cur_repetition;
-							}
-						}
-						else {
-							cur_repetition = 0;
-						}
-					}
+			float alpha = 0.5;
+			for (int i = 0; i < good_candidates.size(); ++i) {
+				// compute the average Ver/Hor
+				float total_Ver = 0;
+				for (int k = 1; k < (int)good_candidates[i].size() - 1; ++k) {
+					total_Ver += Ver(good_candidates[i][k]);
 				}
 
-				if (repetition >= max_repetition) {
-					max_repetition = repetition;
+				float avg_Ver = total_Ver / ((int)good_candidates[i].size() - 2);
 
-					// compute average S
-					float S_total = 0;
-					for (int k = 0; k < selected_candidates[i].size() - 2; ++k) {
-						int h1 = selected_candidates[i][k + 1] - selected_candidates[i][k];
-						int h2 = selected_candidates[i][k + 2] - selected_candidates[i][k + 1];
+				// compute stddev of heights
+				std::vector<float> heights;
+				for (int k = 0; k < (int)good_candidates[i].size() - 1; ++k) {
+					int h = good_candidates[i][k + 1] - good_candidates[i][k];
+					heights.push_back(h);
+				}
+				float stddev = utils::stddev(heights);
+				float avg_h = utils::mean(heights);
+				stddev /= avg_h;
 
-						// only if the size is similar, compute the similarity.
-						if ((float)h1 / h2 <= 1.3 && (float)h2 / h1 <= 1.3) {
-							cv::Mat roi1(img, cv::Rect(0, selected_candidates[i][k], img.cols, h1));
-							cv::Mat roi2(img, cv::Rect(0, selected_candidates[i][k + 1], img.cols, h2));
-							cv::resize(roi2, roi2, roi1.size());
-
-							float S = MI(roi1, roi2);
-							S_total += S;
-						}
-					}
-					float S_avg = S_total / (selected_candidates[i].size() - 2);
-
-
-					if (repetition > max_repetition) {
-						max_S = S_avg;
-						best_id = i;
-					}
-					else {
-						if (S_avg > max_S) {
-							max_S = S_avg;
-							best_id = i;
-						}
-					}
+				if (avg_Ver * alpha + stddev * (1 - alpha) < min_val) {
+					min_val = avg_Ver  * alpha + stddev * (1 - alpha);
+					best_id = i;
 				}
 			}
 
-			return selected_candidates[best_id];
-		}
+			return good_candidates[best_id];
+#endif
 
+#if 0
+			// compute S
+			float min_S = std::numeric_limits<float>::max();
+			int best_id = -1;
+			for (int i = 0; i < good_candidates.size(); ++i) {
+				float avg_S = 0;
+				if (good_candidates[i].size() >= 3) {
+					float total_S = 0;
+					for (int j = 0; j < good_candidates[i].size() - 2; ++j) {
+						int h1 = good_candidates[i][j + 1] - good_candidates[i][j];
+						int h2 = good_candidates[i][j + 2] - good_candidates[i][j + 1];
+						if (std::abs(h1 - h2) / h1 < 0.1) {
+							cv::Mat roi1(img, cv::Rect(0, good_candidates[i][j], img.cols, h1));
+							cv::Mat roi2(img, cv::Rect(0, good_candidates[i][j + 1], img.cols, h2));
+							total_S += MI(roi1, roi2);
+						}
+					}
+
+					avg_S = total_S / (good_candidates[i].size() - 2);
+				}
+
+				if (avg_S < min_S) {
+					min_S = avg_S;
+					best_id = i;
+				}
+			}
+
+			return good_candidates[best_id];
+#endif
+		}
+		
 		// if there is no good splits found, use the original candidate splits
+		std::cerr << "-----------------------------------" << std::endl;
+		std::cerr << "No good split is found!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
 		std::vector<float> y_splits;
 		getSplitLines(Ver, 0.1, y_splits);
 		y_splits.insert(y_splits.begin(), 0);
@@ -629,6 +651,16 @@ namespace fs {
 		// compute Ver and Hor
 		Ver = sobelx_ver - sobely_ver * alpha;
 		Hor = sobely_hor - sobelx_hor * alpha;
+
+		// compute min/max
+		double min_Ver, max_Ver;
+		cv::minMaxLoc(Ver, &min_Ver, &max_Ver);
+		double min_Hor, max_Hor;
+		cv::minMaxLoc(Ver, &min_Hor, &max_Hor);
+
+		// normalize Ver and Hor
+		Ver = (Ver - min_Ver) / (max_Ver - min_Ver);
+		Hor = (Hor - min_Hor) / (max_Hor - min_Hor);
 
 		Hor = Hor.t();
 	}
@@ -1065,12 +1097,22 @@ namespace fs {
 			}
 		}
 
+		// remove the consecutive ones
+		for (int i = 0; i < (int)split_positions.size() - 1;) {
+			if (split_positions[i + 1] == split_positions[i] + 1) {
+				split_positions.erase(split_positions.begin() + i + 1);
+			}
+			else {
+				++i;
+			}
+		}
+
 		// remove the both end
 		if (split_positions.size() > 0) {
-			if (split_positions[0] == 0) {
+			if (split_positions[0] <= 1) {
 				split_positions.erase(split_positions.begin());
 			}
-			if (split_positions.back() == mat.rows - 1) {
+			if (split_positions.back() >= mat.rows - 2) {
 				split_positions.pop_back();
 			}
 		}
@@ -1381,18 +1423,24 @@ namespace fs {
 		float origin_value = mat.at<float>(index);
 
 		// check upward
+		bool local_max_found = false;
 		for (int r = index - 1; r >= 0; --r) {
 			if (mat.at<float>(r) < origin_value) return false;
-			if (fabs(mat.at<float>(r) - origin_value) > threshold) break;
+			if (fabs(mat.at<float>(r) -origin_value) > threshold) {
+				local_max_found = true;
+				break;
+			}
 		}
+
+		if (!local_max_found) return false;
 
 		// check downward
 		for (int r = index + 1; r < mat.rows; ++r) {
 			if (mat.at<float>(r) < origin_value) return false;
-			if (fabs(mat.at<float>(r) - origin_value) > threshold) break;
+			if (fabs(mat.at<float>(r) - origin_value) > threshold) return true;
 		}
 
-		return true;
+		return false;
 	}
 
 

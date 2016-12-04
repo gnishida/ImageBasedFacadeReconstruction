@@ -21,11 +21,9 @@ namespace utils {
 	}
 
 	float stddev(std::vector<float> list) {
-		float sum = 0.0f;
-		for (int i = 0; i < list.size(); ++i) {
-			sum += list[i];
-		}
-		float avg = sum / list.size();
+		if (list.size() <= 1) return 0.0f;
+
+		float avg = mean(list);
 
 		float total = 0.0f;
 		for (int i = 0; i < list.size(); ++i) {
@@ -33,6 +31,14 @@ namespace utils {
 		}
 
 		return sqrt(total / (list.size() - 1));
+	}
+
+	float mean(std::vector<float> list) {
+		float sum = 0.0f;
+		for (int i = 0; i < list.size(); ++i) {
+			sum += list[i];
+		}
+		return sum / list.size();
 	}
 
 	/**

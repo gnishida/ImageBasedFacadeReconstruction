@@ -60,13 +60,13 @@ int main() {
 	cv::Size output_size(227, 227);
 
 	// read the #floors file
-	std::ifstream in("floors.txt");
-	std::map<std::string, int> num_floors;
+	std::ifstream in("floors_columns.txt");
+	std::map<std::string, std::pair<int, int>> params;
 	while (!in.eof()) {
 		std::string filename;
-		int num;
-		in >> filename >> num;
-		num_floors[filename] = num;
+		int v1, v2;
+		in >> filename >> v1 >> v2;
+		params[filename] = std::make_pair(v1, v2);
 
 		if (filename == "") break;
 	}
@@ -95,7 +95,7 @@ int main() {
 		std::vector<float> x_splits;
 		std::vector<float> y_splits;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(img, num_floors[it->path().filename().string()], align_windows, y_splits, x_splits, win_rects);
+		fs::subdivideFacade(img, params[it->path().filename().string()].first, params[it->path().filename().string()].second, align_windows, y_splits, x_splits, win_rects);
 
 		// grad image
 		{
@@ -103,32 +103,37 @@ int main() {
 			cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 
 			// average floor height
-			float average_floor_height = (float)img.rows / num_floors[it->path().filename().string()];
+			float average_floor_height = (float)img.rows / params[it->path().filename().string()].first;
+			float average_column_width = (float)img.cols / params[it->path().filename().string()].second;
 
 			// compute kernel size
-			int kernel_size = average_floor_height / 8;
-			if (kernel_size % 2 == 0) kernel_size++;
+			int kernel_size_V = average_floor_height / 8;
+			if (kernel_size_V % 2 == 0) kernel_size_V++;
+			int kernel_size_H = average_column_width / 8;
+			if (kernel_size_H % 2 == 0) kernel_size_H++;
 
 			// blur the image according to the average floor height
 			cv::Mat blurred_gray_img;
-			if (kernel_size > 1) {
-				cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size, kernel_size), kernel_size);
+			if (kernel_size_V > 1) {
+				cv::GaussianBlur(gray_img, blurred_gray_img, cv::Size(kernel_size_V, kernel_size_V), kernel_size_V);
 			}
 			else {
 				blurred_gray_img = gray_img.clone();
 			}
 
 			cv::Range h_range = cv::Range(average_floor_height * 0.8, average_floor_height * 1.5);
-			cv::Range w_range = cv::Range(average_floor_height * 0.7, average_floor_height * 2.4);
+			cv::Range w_range = cv::Range(average_column_width * 0.6, average_column_width * 1.3);
 
 			// compute Ver and Hor
 			cv::Mat_<float> Ver, Hor;
 			fs::computeVerAndHor2(blurred_gray_img, Ver, Hor, 0.0);
 
 			// smooth Ver and Hor
-			if (kernel_size > 1) {
-				cv::blur(Ver, Ver, cv::Size(kernel_size, kernel_size));
-				cv::blur(Hor, Hor, cv::Size(kernel_size, kernel_size));
+			if (kernel_size_V > 1) {
+				cv::blur(Ver, Ver, cv::Size(kernel_size_V, kernel_size_V));
+			}
+			if (kernel_size_H > 1) {
+				cv::blur(Hor, Hor, cv::Size(kernel_size_H, kernel_size_H));
 			}
 
 			/*

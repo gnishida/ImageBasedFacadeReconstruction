@@ -20,8 +20,8 @@ namespace fs {
 		WindowPos(int left, int top, int right, int bottom) : left(left), top(top), right(right), bottom(bottom), valid(VALID) {}
 	};
 
-	void subdivideFacade(cv::Mat img, int num_floors, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
-	std::vector<float> findBoundaries(const cv::Mat& img, const cv::Range& range, const cv::Mat& Ver);
+	void subdivideFacade(cv::Mat img, int num_floors, int num_columns, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
+	std::vector<float> findBoundaries(const cv::Mat& img, cv::Range range1, cv::Range range2, int num_splits, const cv::Mat_<float>& Ver);
 	bool sortBySecondValue(const std::pair<float, float>& a, const std::pair<float, float>& b);
 	void sortByS(std::vector<float>& splits, std::map<int, float>& S_max);
 	void extractWindows(cv::Mat gray_img, const cv::Mat_<float>& Ver, const cv::Mat_<float>& Hor, const std::vector<float>& y_splits, const std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects);
