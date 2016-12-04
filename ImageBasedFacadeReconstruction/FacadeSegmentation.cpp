@@ -69,6 +69,14 @@ namespace fs {
 		std::vector<float> y_splits_strong;
 		getSplitLines(Ver, 0.5, y_splits_strong);
 
+		// ignore the split lines that are too close to the border
+		if (y_splits_strong.size() > 0 && y_splits_strong[0] < range2.start) {
+			y_splits_strong.erase(y_splits_strong.begin());
+		}
+		if (y_splits_strong.size() > 0 && img.rows - 1 - y_splits_strong.back() < range2.start) {
+			y_splits_strong.pop_back();
+		}
+
 		for (int iter = 0; iter < 2; ++iter) {
 			// find the local minima of Ver
 			std::vector<float> y_splits;
@@ -176,8 +184,10 @@ namespace fs {
 					heights.push_back(h);
 				}
 				float stddev = utils::stddev(heights);
-				float avg_h = utils::mean(heights);
-				stddev /= avg_h;
+				if (heights.size() > 0) {
+					float avg_h = utils::mean(heights);
+					stddev /= avg_h;
+				}
 
 				if (avg_Ver * alpha + stddev * (1 - alpha) < min_val) {
 					min_val = avg_Ver  * alpha + stddev * (1 - alpha);
