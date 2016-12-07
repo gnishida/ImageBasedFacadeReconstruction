@@ -20,7 +20,7 @@ namespace fs {
 		WindowPos(int left, int top, int right, int bottom) : left(left), top(top), right(right), bottom(bottom), valid(VALID) {}
 	};
 
-	void subdivideFacade(cv::Mat img, int num_floors, int num_columns, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
+	void subdivideFacade(cv::Mat img, float floor_height, float column_width, bool align_windows, std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& win_rects);
 	std::vector<float> findBoundaries(const cv::Mat& img, cv::Range range1, cv::Range range2, int num_splits, const cv::Mat_<float>& Ver);
 	bool sortBySecondValue(const std::pair<float, float>& a, const std::pair<float, float>& b);
 	void sortByS(std::vector<float>& splits, std::map<int, float>& S_max);

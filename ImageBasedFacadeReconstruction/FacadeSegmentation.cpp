@@ -7,15 +7,11 @@
 namespace fs {
 	int seq = 0;
 
-	void subdivideFacade(cv::Mat img, int num_floors, int num_columns, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
+	void subdivideFacade(cv::Mat img, float average_floor_height, float average_column_width, bool align_windows, std::vector<float>& y_splits, std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
 		// gray scale
 		cv::Mat gray_img;
 		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
 		
-		// average floor height
-		float average_floor_height = (float)img.rows / num_floors;
-		float average_column_width = (float)img.cols / num_columns;
-
 		// compute kernel size
 		int kernel_size_V = average_floor_height / 8;
 		if (kernel_size_V % 2 == 0) kernel_size_V++;
@@ -49,7 +45,7 @@ namespace fs {
 		// find the floor boundaries
 		cv::Range h_range1 = cv::Range(average_floor_height * 0.7, average_floor_height * 1.5);
 		cv::Range h_range2 = cv::Range(average_floor_height * 0.5, average_floor_height * 1.95);
-		y_splits = findBoundaries(blurred_gray_img, h_range1, h_range2, num_floors + 1, Ver);
+		y_splits = findBoundaries(blurred_gray_img, h_range1, h_range2, std::round(img.rows / average_floor_height) + 1, Ver);
 		
 		////////////////////////////////////////////////////////////////////////////////////////////////
 		// subdivide horizontally
@@ -57,7 +53,7 @@ namespace fs {
 		// find the floor boundaries
 		cv::Range w_range1 = cv::Range(average_column_width * 0.6, average_column_width * 1.3);
 		cv::Range w_range2 = cv::Range(average_column_width * 0.3, average_column_width * 1.95);
-		x_splits = findBoundaries(blurred_gray_img.t(), w_range1, w_range2, num_columns + 1, Hor);
+		x_splits = findBoundaries(blurred_gray_img.t(), w_range1, w_range2, std::round(img.cols / average_column_width) + 1, Hor);
 		
 		extractWindows(gray_img, Ver, Hor, y_splits, x_splits, win_rects);
 	}

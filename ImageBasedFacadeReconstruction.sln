@@ -25,8 +25,6 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "FacadeSubdivision", "Facade
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "EdgeDetection", "EdgeDetection\EdgeDetection.vcxproj", "{9D1060E6-1E7D-4F8C-AB3E-2FE7FF06AA0A}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PreprocessFiltering", "PreprocessFiltering\PreprocessFiltering.vcxproj", "{72880D47-FDD6-4FC3-8CA4-EA113301A708}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Mixed Platforms = Debug|Mixed Platforms
@@ -169,18 +167,6 @@ Global
 		{9D1060E6-1E7D-4F8C-AB3E-2FE7FF06AA0A}.Release|Win32.Build.0 = Release|Win32
 		{9D1060E6-1E7D-4F8C-AB3E-2FE7FF06AA0A}.Release|x64.ActiveCfg = Release|x64
 		{9D1060E6-1E7D-4F8C-AB3E-2FE7FF06AA0A}.Release|x64.Build.0 = Release|x64
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|Mixed Platforms.ActiveCfg = Debug|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|Mixed Platforms.Build.0 = Debug|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|Win32.ActiveCfg = Debug|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|Win32.Build.0 = Debug|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|x64.ActiveCfg = Debug|x64
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Debug|x64.Build.0 = Debug|x64
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|Mixed Platforms.ActiveCfg = Release|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|Mixed Platforms.Build.0 = Release|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|Win32.ActiveCfg = Release|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|Win32.Build.0 = Release|Win32
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|x64.ActiveCfg = Release|x64
-		{72880D47-FDD6-4FC3-8CA4-EA113301A708}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -22,42 +22,7 @@
 #include <boost/filesystem.hpp>
 
 int main() {
-# if 0
-	boost::filesystem::path dir("../rolling/");
-	for (auto it = boost::filesystem::directory_iterator(dir); it != boost::filesystem::directory_iterator(); ++it) {
-		if (boost::filesystem::is_directory(it->path())) continue;
-
-		cv::Mat img = cv::imread((std::string("../rolling/") + it->path().filename().string()).c_str());
-		cv::Mat gray_img;
-		cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
-
-		cv::Mat_<float> Ver, Hor;
-		fs::computeVerAndHor2(gray_img, Ver, Hor, 0);
-
-		fs::outputImageWithHorizontalAndVerticalGraph(img, Ver, Hor, std::string("../rolling_grad/") + it->path().filename().string());
-
-		cv::Mat edge_img;
-		cv::Canny(img, edge_img, 30, 100);
-		cv::imwrite((std::string("../rolling_edge/") + it->path().filename().string()).c_str(), edge_img);
-
-		cv::Mat line_img = img.clone();
-		std::vector<cv::Vec4i> lines;
-		cv::HoughLinesP(edge_img, lines, 1, CV_PI / 180, 20, 3, 1);
-		for (size_t i = 0; i < lines.size(); ++i) {
-			float theta = atan2(lines[i][3] - lines[i][1], lines[i][2] - lines[i][0]) / CV_PI * 180;
-			if (abs(theta) < 10 || abs(theta) > 170) {
-				cv::line(line_img, cv::Point(lines[i][0], lines[i][1]), cv::Point(lines[i][2], lines[i][3]), cv::Scalar(0, 255, 255), 3, 8);
-			}
-		}
-		cv::imwrite((std::string("../rolling_line/") + it->path().filename().string()).c_str(), line_img);
-	}
-#endif
-
-
-#if 1
 	bool align_windows = false;
-	bool resize = false;
-	cv::Size output_size(227, 227);
 
 	// read the #floors file
 	std::ifstream in("floors_columns.txt");
@@ -66,10 +31,14 @@ int main() {
 		std::string filename;
 		int v1, v2;
 		in >> filename >> v1 >> v2;
+
 		params[filename] = std::make_pair(v1, v2);
 
 		if (filename == "") break;
 	}
+
+	std::ofstream tile_out("tiles.txt");
+
 
 	boost::filesystem::path dir("../testdata/");
 	//boost::filesystem::path dir("../testdata2/");
@@ -87,6 +56,10 @@ int main() {
 		// read an image
 		cv::Mat img = cv::imread(dir.string() + it->path().filename().string());
 
+		// floor height / column width
+		float average_floor_height = (float)img.rows / params[it->path().filename().string()].first;
+		float average_column_width = (float)img.cols / params[it->path().filename().string()].second;
+
 		// gray scale
 		//cv::Mat gray_img;
 		//cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
@@ -95,16 +68,12 @@ int main() {
 		std::vector<float> x_splits;
 		std::vector<float> y_splits;
 		std::vector<std::vector<fs::WindowPos>> win_rects;
-		fs::subdivideFacade(img, params[it->path().filename().string()].first, params[it->path().filename().string()].second, align_windows, y_splits, x_splits, win_rects);
+		fs::subdivideFacade(img, average_floor_height, average_column_width, align_windows, y_splits, x_splits, win_rects);
 
 		// grad image
 		{
 			cv::Mat gray_img;
 			cv::cvtColor(img, gray_img, cv::COLOR_BGR2GRAY);
-
-			// average floor height
-			float average_floor_height = (float)img.rows / params[it->path().filename().string()].first;
-			float average_column_width = (float)img.cols / params[it->path().filename().string()].second;
 
 			// compute kernel size
 			int kernel_size_V = average_floor_height / 8;
@@ -155,9 +124,34 @@ int main() {
 		// window image
 		fs::outputFacadeAndWindows(img, y_splits, x_splits, win_rects, dir_win.string() + it->path().filename().string(), cv::Scalar(0, 255, 255), 3);
 
-	}
+		// tile images
+		char base_name[256];
+		sscanf(it->path().filename().string().c_str(), "%s.png", base_name);
+		int tile_cnt = 0;
+		for (int i = 0; i < y_splits.size() - 1; ++i) {
+			for (int j = 0; j < x_splits.size() - 1; ++j) {
+				int x1 = x_splits[j];
+				int x2 = x_splits[j + 1];
+				int y1 = y_splits[i];
+				int y2 = y_splits[i + 1];
 
-#endif
+				if ((y_splits.size() - 1) * (x_splits.size() - 1) < 20 || (tile_cnt < 20 && rand() % 4 == 0)) {
+
+					char file_name[256];
+					sprintf(file_name, "%s_%d_%d.png", base_name, i, j);
+					cv::Mat tile_img(img, cv::Rect(x1, y1, x2 - x1 + 1, y2 - y1 + 1));
+					cv::Mat resized_tile_img;
+					cv::resize(tile_img, resized_tile_img, cv::Size(227, 227));
+					cv::imwrite((std::string("../tiles/") + file_name).c_str(), resized_tile_img);
+
+					tile_out << file_name << "\t\n";
+
+					tile_cnt++;
+				}
+			}
+		}
+	}
+	tile_out.close();
 
 	return 0;
 }
