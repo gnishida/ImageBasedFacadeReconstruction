@@ -55,7 +55,7 @@ namespace fs {
 		cv::Range w_range2 = cv::Range(average_column_width * 0.3, average_column_width * 1.95);
 		x_splits = findBoundaries(blurred_gray_img.t(), w_range1, w_range2, std::round(img.cols / average_column_width) + 1, Hor);
 		
-		extractWindows(gray_img, Ver, Hor, y_splits, x_splits, win_rects);
+		extractWindows(gray_img, y_splits, x_splits, win_rects);
 	}
 
 	std::vector<float> findBoundaries(const cv::Mat& img, cv::Range range1, cv::Range range2, int num_splits, const cv::Mat_<float>& Ver) {
@@ -254,7 +254,7 @@ namespace fs {
 		}
 	}
 
-	void extractWindows(cv::Mat gray_img, const cv::Mat_<float>& Ver, const cv::Mat_<float>& Hor, const std::vector<float>& y_splits, const std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
+	void extractWindows(cv::Mat gray_img, const std::vector<float>& y_splits, const std::vector<float>& x_splits, std::vector<std::vector<WindowPos>>& win_rects) {
 		// compute gradient magnitude
 		cv::Mat sobelx;
 		cv::Sobel(gray_img, sobelx, CV_32F, 1, 0);
@@ -281,28 +281,30 @@ namespace fs {
 				int min_w = w * 0.1;
 				int min_h = h * 0.1;
 
-				// for too small region, no window is created
-				/*if (h < average_floor_height * 0.25 || w < average_floor_height * 0.2) {
-					win_rects[i][j].valid = WindowPos::INVALID;
-					continue;
-					}*/
+				// tile image
+				cv::Mat tile_img(gray_img, cv::Rect(x1, y1, w, h));
+
+				// Update: 2016/12/07
+				// use Ver/Hor of this tile instead of the global ones
+				cv::Mat_<float> Ver, Hor;
+				computeVerAndHor2(tile_img, Ver, Hor, 0.0);
 
 
 				// compute max/min of Ver/Hor
-				float top_Ver = Ver(y1);
-				float bottom_Ver = Ver(y1 + h - 1);
+				float top_Ver = Ver(0);
+				float bottom_Ver = Ver(h - 1);
 				float max_Ver = 0;
 				for (int k = 0; k < h; ++k) {
-					if (Ver(y1 + k) > max_Ver) {
-						max_Ver = Ver(y1 + k);
+					if (Ver(k) > max_Ver) {
+						max_Ver = Ver(k);
 					}
 				}
-				float left_Hor = Hor(x1);
-				float right_Hor = Hor(x1 + w - 1);
+				float left_Hor = Hor(0);
+				float right_Hor = Hor(w - 1);
 				float max_Hor = 0;
 				for (int k = 0; k < w; ++k) {
-					if (Hor(x1 + k) > max_Hor) {
-						max_Hor = Hor(x1 + k);
+					if (Hor(k) > max_Hor) {
+						max_Hor = Hor(k);
 					}
 				}
 
@@ -312,31 +314,15 @@ namespace fs {
 				float left_threshold_Hor = (max_Hor - left_Hor) * 0.2 + left_Hor;
 				float right_threshold_Hor = (max_Hor - right_Hor) * 0.2 + right_Hor;
 
-				// check the gradient magnitude along the boundary
-				float total_mag = 0;
-				for (int xx = x1; xx <= x2; ++xx) {
-					total_mag += grad_mag(y1, xx);
-					total_mag += grad_mag(y2, xx);
-				}
-				for (int yy = y1; yy <= y2; ++yy) {
-					total_mag += grad_mag(yy, x1);
-					total_mag += grad_mag(yy, x2);
-				}
-
-				// compute the average magnitude along the boundary
-				float avg_mag = total_mag / (w * 2 + h * 2);
-
 				// defind a threshold
-				float threshold1 = 50;// avg_mag * 1.2;
-				float threshold2 = 150;// avg_mag * 3;
+				float threshold1 = 50;
+				float threshold2 = 150;
 
 				// detect edge
-				cv::Mat roi(gray_img, cv::Rect(x1, y1, w, h));
+				//cv::Mat roi(gray_img, cv::Rect(x1, y1, w, h));
 				cv::Mat edges;
-				cv::Canny(roi, edges, threshold1, threshold2);
-
-
-
+				cv::Canny(tile_img, edges, threshold1, threshold2);
+				
 				// sum up edge horizontally and vertically
 				cv::Mat edgeV, edgeH;
 				cv::reduce(edges, edgeV, 1, cv::REDUCE_SUM, CV_32F);
@@ -351,10 +337,10 @@ namespace fs {
 				bool flag = false;
 				for (int xx = 0; xx < w; ++xx) {
 					if (!flag) {
-						if (Hor(x1 + xx) < left_threshold_Hor) continue;
+						if (Hor(xx) < left_threshold_Hor) continue;
 						flag = true;
 					}
-					if (edgeH.at<float>(xx, 0) >= 255 * h * 0.2) {
+					if (edgeH.at<float>(xx, 0) >= 255 * h * 0.1) {
 						left = xx;
 						break;
 					}
@@ -365,10 +351,10 @@ namespace fs {
 				flag = false;
 				for (int xx = w - 1; xx >= 0; --xx) {
 					if (!flag) {
-						if (Hor(x1 + xx) < right_threshold_Hor) continue;
+						if (Hor(xx) < right_threshold_Hor) continue;
 						flag = true;
 					}
-					if (edgeH.at<float>(xx, 0) >= 255 * h * 0.2) {
+					if (edgeH.at<float>(xx, 0) >= 255 * h * 0.1) {
 						right = xx;
 						break;
 					}
@@ -379,10 +365,10 @@ namespace fs {
 				flag = false;
 				for (int yy = 0; yy < h; ++yy) {
 					if (!flag) {
-						if (Ver(y1 + yy) < top_threshold_Ver) continue;
+						if (Ver(yy) < top_threshold_Ver) continue;
 						flag = true;
 					}
-					if (edgeV.at<float>(yy, 0) >= 255 * w * 0.2) {
+					if (edgeV.at<float>(yy, 0) >= 255 * w * 0.1) {
 						top = yy;
 						break;
 					}
@@ -393,16 +379,16 @@ namespace fs {
 				flag = false;
 				for (int yy = h - 1; yy >= 0; --yy) {
 					if (!flag) {
-						if (Ver(y1 + yy) < top_threshold_Ver) continue;
+						if (Ver(yy) < top_threshold_Ver) continue;
 						flag = true;
 					}
-					if (edgeV.at<float>(yy, 0) >= 255 * w * 0.2) {
+					if (edgeV.at<float>(yy, 0) >= 255 * w * 0.1) {
 						bottom = yy;
 						break;
 					}
 				}
 
-				if (left >= 0 && right >= 0 && right - left + 1 >= min_w && top >= 0 && bottom >= 0 && bottom - top + 1 > min_h) {
+				if (left >= 0 && right >= 0 && right - left + 1 >= min_w && top >= 0 && bottom >= 0 && bottom - top + 1 > min_h && (right - left + 1) / (bottom - top + 1) < 8 && (bottom - top + 1) / (right - left + 1) < 8) {
 					win_rects[i][j] = WindowPos(left, top, right, bottom);
 				}
 				else {
@@ -672,419 +658,6 @@ namespace fs {
 	}
 
 	/**
-	 * tile内のwindowを検出し、その矩形座標を返却する。
-	 * windowが検出されなかった場合はfalseを返却する。
-	 *
-	 * @param tile					タイル画像 (3-channel image)
-	 * @param min_size
-	 * @param horizontal_edge_max	水平分割線に対する、エッジの強さの最小値
-	 * @param rect
-	 * @return						分割する場合はtrue / false otherwise
-	 */
-	bool subdivideTile(const cv::Mat& tile, const cv::Mat& edges, int min_size, int tile_margin, WindowPos& winpos) {
-		if (tile.cols < min_size || tile.rows < min_size) {
-			winpos.valid = WindowPos::INVALID;
-			return false;
-		}
-
-		// sum horizontally and vertically
-		cv::Mat vertical_edges;
-		cv::Mat horizontal_edges;
-		cv::reduce(edges, vertical_edges, 0, CV_REDUCE_SUM, CV_32F);
-		cv::reduce(edges, horizontal_edges, 1, CV_REDUCE_SUM, CV_32F);
-
-		cv::Mat vertical_edges_max;
-		cv::Mat horizonta_edges_max;
-		cv::reduce(vertical_edges, vertical_edges_max, 1, CV_REDUCE_MAX, CV_32F);
-		cv::reduce(horizontal_edges, horizonta_edges_max, 0, CV_REDUCE_MAX, CV_32F);
-
-		float vertical_edge_threshold = tile.rows * 0.2f * 255;
-		float horizontal_edge_threshold = tile.cols * 0.2f * 255;
-
-		// find the  vertical edges (or x coordinates) that are closest to the side boundary
-		int x1 = -1;
-		float prev_x1;
-		for (int c = tile_margin; c < vertical_edges.cols - tile_margin; ++c) {
-			if (x1 == -1) {
-				if (vertical_edges.at<float>(0, c) >= vertical_edge_threshold) {
-					x1 = c;
-					prev_x1 = vertical_edges.at<float>(0, c);
-				}
-			}
-			else if (cvutils::isLocalMaximum(vertical_edges, c, 3)) {
-				x1 = c;
-				prev_x1 = vertical_edges.at<float>(0, c);
-			}
-			else {
-				break;
-			}
-
-		}
-		int x2 = -1;
-		float prev_x2;
-		for (int c = vertical_edges.cols - tile_margin - 1; c >= tile_margin; --c) {
-			if (x2 == -1) {
-				if (vertical_edges.at<float>(0, c) >= vertical_edge_threshold) {
-					x2 = c;
-					prev_x2 = vertical_edges.at<float>(0, c);
-				}
-			}
-			else if (cvutils::isLocalMaximum(vertical_edges, c, 3)) {
-				x2 = c;
-				prev_x2 = vertical_edges.at<float>(0, c);
-			}
-			else {
-				break;
-			}
-		}
-		if (x1 == -1 || x2 == -1 || x2 - x1 <= 1) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		// find the horizontqal edges (or y coordinates) that are closest to the top and bottom boundaries
-		int y1 = -1;
-		float prev_y1;
-		for (int r = tile_margin; r < horizontal_edges.rows - tile_margin; ++r) {
-			if (y1 == -1) {
-				if (horizontal_edges.at<float>(r, 0) >= horizontal_edge_threshold) {
-					y1 = r;
-					prev_y1 = horizontal_edges.at<float>(r, 0);
-				}
-			}
-			else if (cvutils::isLocalMaximum(horizontal_edges, r, 3)) {
-				y1 = r;
-				prev_y1 = horizontal_edges.at<float>(r, 0);
-			}
-			else {
-				break;
-			}
-		}
-		int y2 = -1;
-		float prev_y2;
-		for (int r = horizontal_edges.rows - tile_margin - 1; r >= tile_margin; --r) {
-			if (y2 == -1) {
-				if (horizontal_edges.at<float>(r, 0) >= horizontal_edge_threshold) {
-					y2 = r;
-					prev_y2 = horizontal_edges.at<float>(r, 0);
-				}
-			}
-			else if (cvutils::isLocalMaximum(horizontal_edges, r, 3)) {
-				y2 = r;
-				prev_y2 = horizontal_edges.at<float>(r, 0);
-			}
-			else {
-				break;
-			}
-		}
-		if (y1 == -1 || y2 == -1 || y2 - y1 <= 1) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		if ((float)(x2 - x1) / (y2 - y1) > 8.0f || (float)(y2 - y1) / (x2 - x1) > 8.0f) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		winpos = WindowPos(x1, y1, tile.cols - 1 - x2, tile.rows - 1 - y2);
-
-		return true;
-	}
-
-	/**
-	* tile内のwindowを検出し、その矩形座標を返却する。
-	* windowが検出されなかった場合はfalseを返却する。
-	*
-	* @param tile					タイル画像 (3-channel image)
-	* @param min_size
-	* @param horizontal_edge_max	水平分割線に対する、エッジの強さの最小値
-	* @param rect
-	* @return						分割する場合はtrue / false otherwise
-	*/
-	bool subdivideTile2(const cv::Mat& tile, cv::Mat Ver, cv::Mat Hor, int min_size, int tile_margin, WindowPos& winpos) {
-		if (tile.cols < min_size || tile.rows < min_size) {
-			winpos.valid = WindowPos::INVALID;
-			return false;
-		}
-
-		//cv::imwrite("tile.png", tile);
-
-		outputImageWithHorizontalAndVerticalGraph(tile, Ver, Hor, "graph.png");
-
-		double Ver_min, Ver_max;
-		cv::minMaxLoc(Ver, &Ver_min, &Ver_max);
-		double Hor_min, Hor_max;
-		cv::minMaxLoc(Hor, &Hor_min, &Hor_max);
-
-		float vertical_edge_threshold = (Ver_max - Ver_min) * 0.25f + Ver_min;
-		float horizontal_edge_threshold = (Hor_max - Hor_max) * 0.25f + Ver_min;
-
-
-		// find the  vertical edges (or x coordinates) that are closest to the side boundary
-		int x1 = -1;
-		float prev_x1;
-		for (int c = tile_margin; c < Hor.cols - tile_margin; ++c) {
-			if (x1 == -1) {
-				if (Hor.at<float>(0, c) >= horizontal_edge_threshold) {
-					x1 = c;
-					prev_x1 = Hor.at<float>(0, c);
-				}
-			}
-			else if (Hor.at<float>(0, c) > prev_x1) {
-				x1 = c;
-				prev_x1 = Hor.at<float>(0, c);
-			}
-			else {
-				break;
-			}
-
-		}
-		int x2 = -1;
-		float prev_x2;
-		for (int c = Hor.cols - tile_margin - 1; c >= tile_margin; --c) {
-			if (x2 == -1) {
-				if (Hor.at<float>(0, c) >= horizontal_edge_threshold) {
-					x2 = c;
-					prev_x2 = Hor.at<float>(0, c);
-				}
-			}
-			else if (Hor.at<float>(0, c) > prev_x2) {
-				x2 = c;
-				prev_x2 = Hor.at<float>(0, c);
-			}
-			else {
-				break;
-			}
-		}
-		if (x1 == -1 || x2 == -1 || x2 - x1 <= 1) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		// find the horizontqal edges (or y coordinates) that are closest to the top and bottom boundaries
-		int y1 = -1;
-		float prev_y1;
-		for (int r = tile_margin; r < Ver.rows - tile_margin; ++r) {
-			if (y1 == -1) {
-				if (Ver.at<float>(r, 0) >= vertical_edge_threshold) {
-					y1 = r;
-					prev_y1 = Ver.at<float>(r, 0);
-				}
-			}
-			else if (Ver.at<float>(r, 0) > prev_y1) {
-				y1 = r;
-				prev_y1 = Ver.at<float>(r, 0);
-			}
-			else {
-				break;
-			}
-		}
-		int y2 = -1;
-		float prev_y2;
-		for (int r = Ver.rows - tile_margin - 1; r >= tile_margin; --r) {
-			if (y2 == -1) {
-				if (Ver.at<float>(r, 0) >= vertical_edge_threshold) {
-					y2 = r;
-					prev_y2 = Ver.at<float>(r, 0);
-				}
-			}
-			else if (Ver.at<float>(r, 0) > prev_y2) {
-				y2 = r;
-				prev_y2 = Ver.at<float>(r, 0);
-			}
-			else {
-				break;
-			}
-		}
-		if (y1 == -1 || y2 == -1 || y2 - y1 <= 1) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		if ((float)(x2 - x1) / (y2 - y1) > 8.0f || (float)(y2 - y1) / (x2 - x1) > 8.0f) {
-			winpos.valid = WindowPos::UNCERTAIN;
-			return false;
-		}
-
-		winpos = WindowPos(x1, y1, tile.cols - 1 - x2, tile.rows - 1 - y2);
-
-		return true;
-	}
-
-	/**
-	* Ver(y)の極小値をsplit lineの候補とし、S_max(y)に基づいて最適なsplit lineの組み合わせを探す。
-	*
-	* @param Ver			Ver(y)
-	* @param min_interval	minimum floor height
-	* @param max_interval	maximum floor height
-	* @param y_split		最適なsplit lineの組み合わせ
-	*/
-	void findBestHorizontalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Ver, float min_interval, float max_interval, std::vector<int>& y_split) {
-		y_split.clear();
-
-		std::vector<int> y_candidates = cvutils::getPeak(Ver, false, 1, cvutils::LOCAL_MINIMUM, 1);
-		y_candidates.insert(y_candidates.begin(), 0);
-		y_candidates.push_back(img.rows - 1);
-
-		std::vector<std::vector<float>> costs;
-		std::vector<std::vector<int>> indices;
-		std::vector<std::vector<int>> nums;
-
-		// 最初の行のコストを初期化
-		{
-			costs.push_back(std::vector<float>(y_candidates.size(), std::numeric_limits<float>::max()));
-			indices.push_back(std::vector<int>(y_candidates.size(), -1));
-			nums.push_back(std::vector<int>(y_candidates.size(), 0));
-			costs[0][0] = 0;
-			indices[0][0] = 0;
-			nums[0][0] = 0;
-		}
-
-		// 2行目以降について、Dynamic Programmingで最小コストを計算
-		for (int i = 1;; ++i) {
-			costs.push_back(std::vector<float>(y_candidates.size(), std::numeric_limits<float>::max()));
-			indices.push_back(std::vector<int>(y_candidates.size(), -1));
-			nums.push_back(std::vector<int>(y_candidates.size(), 0));
-
-			for (int k = 0; k < y_candidates.size() - 1; ++k) {
-				bool found = false;
-
-				for (int j = k + 1; j < y_candidates.size() - 1; ++j) {
-					if (indices[i - 1][k] == -1) continue;
-
-					if (y_candidates[j] - y_candidates[k] < min_interval) continue;
-					if (found && y_candidates[j] - y_candidates[k] > max_interval) continue;
-
-					found = true;
-					float new_cost = costs[i - 1][k] + Ver(y_candidates[j], 0);
-					if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
-						costs[i][j] = new_cost;
-						indices[i][j] = k;
-						nums[i][j] = nums[i - 1][k] + 1;
-					}
-				}
-			}
-
-			for (int k = 0; k < y_candidates.size(); ++k) {
-				if (indices[i - 1][k] == -1) continue;
-
-				if (y_candidates.back() - y_candidates[k] > max_interval) continue;
-
-				if (costs[i - 1][k] / nums[i - 1][k] < costs[i].back() / nums[i].back()) {
-					costs[i].back() = costs[i - 1][k];
-					indices[i].back() = k;
-					nums[i].back() = nums[i - 1][k];
-				}
-			}
-
-			// 最後のy以外がすべて-1なら、終了
-			bool updated = false;
-			for (int j = 0; j < indices[i].size() - 1; ++j) {
-				if (indices[i][j] != -1) updated = true;
-			}
-			if (!updated) break;
-		}
-
-		// y_splitに、最適解を格納する
-		y_split.push_back(y_candidates.back());
-		int prev_index = y_candidates.size() - 1;
-		for (int i = indices.size() - 1; i >= 1; --i) {
-			int index = indices[i][prev_index];
-			if (index == prev_index) continue;
-
-			y_split.insert(y_split.begin(), y_candidates[index]);
-			prev_index = index;
-		}
-	}
-
-	/**
-	* Hor(x)の極小値をsplit lineの候補とし、S_max(x)に基づいて最適なsplit lineの組み合わせを探す。
-	*
-	* @param Hor			Hor(x)
-	* @param min_interval	minimum tile width
-	* @param max_interval	maximum tile width
-	* @param x_split		最適なsplit lineの組み合わせ
-	*/
-	void findBestVerticalSplitLines(const cv::Mat& img, const cv::Mat_<float>& Hor, float min_interval, float max_interval, std::vector<int>& x_split) {
-		x_split.clear();
-
-		std::vector<int> x_candidates = cvutils::getPeak(Hor, false, 1, cvutils::LOCAL_MINIMUM, 1);
-		x_candidates.insert(x_candidates.begin(), 0);
-		x_candidates.push_back(img.cols - 1);
-
-		std::vector<std::vector<float>> costs;
-		std::vector<std::vector<int>> indices;
-		std::vector<std::vector<int>> nums;
-
-		// 最初の列のコストを初期化
-		{
-			costs.push_back(std::vector<float>(x_candidates.size(), std::numeric_limits<float>::max()));
-			indices.push_back(std::vector<int>(x_candidates.size(), -1));
-			nums.push_back(std::vector<int>(x_candidates.size(), 0));
-			costs[0][0] = 0;
-			indices[0][0] = 0;
-			nums[0][0] = 0;
-		}
-
-		// 2列目以降について、Dynamic Programmingで最小コストを計算
-		for (int i = 1;; ++i) {
-			costs.push_back(std::vector<float>(x_candidates.size(), std::numeric_limits<float>::max()));
-			indices.push_back(std::vector<int>(x_candidates.size(), -1));
-			nums.push_back(std::vector<int>(x_candidates.size(), 0));
-
-			for (int k = 0; k < x_candidates.size() - 1; ++k) {
-				bool found = false;
-
-				for (int j = k + 1; j < x_candidates.size() - 1; ++j) {
-					if (indices[i - 1][k] == -1) continue;
-
-					if (x_candidates[j] - x_candidates[k] < min_interval) continue;
-					if (found && x_candidates[j] - x_candidates[k] > max_interval) continue;
-
-					found = true;
-					float new_cost = costs[i - 1][k] + Hor(0, x_candidates[j]);
-					if (new_cost / (nums[i - 1][k] + 1) < costs[i][j] / nums[i][j]) {
-						costs[i][j] = new_cost;
-						indices[i][j] = k;
-						nums[i][j] = nums[i - 1][k] + 1;
-					}
-				}
-			}
-
-			for (int k = 0; k < x_candidates.size(); ++k) {
-				if (indices[i - 1][k] == -1) continue;
-
-				if (x_candidates.back() - x_candidates[k] > max_interval) continue;
-
-				if (costs[i - 1][k] / nums[i - 1][k] < costs[i].back() / nums[i].back()) {
-					costs[i].back() = costs[i - 1][k];
-					indices[i].back() = k;
-					nums[i].back() = nums[i - 1][k];
-				}
-			}
-
-			// 最後のx以外がすべて-1なら、終了
-			bool updated = false;
-			for (int j = 0; j < indices[i].size() - 1; ++j) {
-				if (indices[i][j] != -1) updated = true;
-			}
-			if (!updated) break;
-		}
-
-		// x_splitに、最適解を格納する
-		x_split.push_back(x_candidates.back());
-		int prev_index = x_candidates.size() - 1;
-		for (int i = indices.size() - 1; i >= 1; --i) {
-			int index = indices[i][prev_index];
-			if (index == prev_index) continue;
-
-			x_split.insert(x_split.begin(), x_candidates[index]);
-			prev_index = index;
-		}
-	}
-
-	/**
 	* 与えられた関数の極小値を使ってsplit lineを決定する。
 	*/
 	void getSplitLines(const cv::Mat_<float>& val, float threshold, std::vector<float>& split_positions) {
@@ -1243,86 +816,6 @@ namespace fs {
 			}
 			else if (min_flags[i - 1] == 1) {
 				split_positions.push_back(tmp[i]);
-			}
-		}
-	}
-
-	void refine(std::vector<float>& y_split, std::vector<float>& x_split, std::vector<std::vector<WindowPos>>& winpos, float threshold) {
-		// 各フロアの窓の数をカウントする
-		std::vector<int> win_per_row(y_split.size() - 1, 0);
-		int max_win_per_row = 0;
-		for (int i = 0; i < y_split.size() - 1; ++i) {
-			for (int j = 0; j < x_split.size() - 1; ++j) {
-				if (winpos[i][j].valid == WindowPos::VALID) {
-					win_per_row[i]++;
-				}
-			}
-			if (win_per_row[i] > max_win_per_row) {
-				max_win_per_row = win_per_row[i];
-			}
-		}
-
-		// 各カラムの窓の数をカウントする
-		std::vector<int> win_per_col(x_split.size() - 1, 0);
-		int max_win_per_col = 0;
-		for (int j = 0; j < x_split.size() - 1; ++j) {
-			for (int i = 0; i < y_split.size() - 1; ++i) {
-				if (winpos[i][j].valid == WindowPos::VALID) {
-					win_per_col[j]++;
-				}
-			}
-			if (win_per_col[j] > max_win_per_col) {
-				max_win_per_col = win_per_col[j];
-			}
-		}
-
-		// 壁のフロアかどうかチェックする
-		std::vector<bool> is_wall_row(y_split.size() - 1, false);
-		for (int i = 0; i < y_split.size() - 1; ++i) {
-			if (win_per_row[i] < max_win_per_row * threshold) {
-				is_wall_row[i] = true;
-
-				for (int j = 0; j < x_split.size() - 1; ++j) {
-					winpos[i][j].valid = WindowPos::INVALID;
-				}
-			}
-		}
-
-		// 壁のカラムかどうかチェックする
-		std::vector<bool> is_wall_col(x_split.size() - 1, false);
-		for (int j = 0; j < x_split.size() - 1; ++j) {
-			if (win_per_col[j] < max_win_per_col * threshold) {
-				is_wall_col[j] = true;
-
-				for (int i = 0; i < y_split.size() - 1; ++i) {
-					winpos[i][j].valid = WindowPos::INVALID;
-				}
-			}
-		}
-
-		// 窓のないフロアが連続している場合は、連結する
-		for (int i = 0; i < is_wall_row.size() - 1;) {
-			if (is_wall_row[i] && is_wall_row[i + 1]) {
-				is_wall_row.erase(is_wall_row.begin() + i + 1);
-				y_split.erase(y_split.begin() + i + 1);
-				winpos.erase(winpos.begin() + i + 1);
-			}
-			else {
-				i++;
-			}
-		}
-
-		// 窓のないカラムが連続している場合は、連結する
-		for (int j = 0; j < is_wall_col.size() - 1;) {
-			if (is_wall_col[j] && is_wall_col[j + 1]) {
-				is_wall_col.erase(is_wall_col.begin() + j + 1);
-				x_split.erase(x_split.begin() + j + 1);
-				for (int i = 0; i < y_split.size() - 1; ++i) {
-					winpos[i].erase(winpos[i].begin() + j + 1);
-				}
-			}
-			else {
-				j++;
 			}
 		}
 	}
